@@ -1,0 +1,307 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ product.title }} - 商品詳細{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('index') }}">ホーム</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('products') }}">商品一覧</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ product.title }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-md-4">
+            {% if product.package_image_url %}
+            <img src="{{ product.package_image_url }}" alt="パッケージ画像" class="img-fluid mb-3">
+            {% else %}
+            <div class="card mb-3">
+                <div class="card-body text-center">
+                    <p class="text-muted">パッケージ画像なし</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    基本情報
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">{{ product.title }}</h5>
+                    <p class="card-text">
+                        <small class="text-muted">商品ID: {{ product.dmm_product_id }}</small>
+                    </p>
+                    
+                    {% if product.get_actresses_list() %}
+                    <p>
+                        <strong>出演者:</strong><br>
+                        {% for actress in product.get_actresses_list() %}
+                        <span class="badge bg-info text-dark">{{ actress }}</span>
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+                    
+                    {% if product.get_genres_list() %}
+                    <p>
+                        <strong>ジャンル:</strong><br>
+                        {% for genre in product.get_genres_list() %}
+                        <span class="badge bg-secondary">{{ genre }}</span>
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+                    
+                    {% if product.maker %}
+                    <p>
+                        <strong>メーカー:</strong> {{ product.maker }}
+                    </p>
+                    {% endif %}
+                    
+                    {% if product.release_date %}
+                    <p>
+                        <strong>発売日:</strong> {{ product.release_date.strftime('%Y年%m月%d日') }}
+                    </p>
+                    {% endif %}
+                    
+                    <a href="{{ product.url }}" target="_blank" class="btn btn-primary">商品ページを開く</a>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    投稿ステータス
+                </div>
+                <div class="card-body">
+                    <p>
+                        <strong>ステータス:</strong>
+                        {% if product.posted %}
+                        <span class="badge bg-success">投稿済み</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">未投稿</span>
+                        {% endif %}
+                    </p>
+                    
+                    {% if product.last_posted_at %}
+                    <p>
+                        <strong>最終投稿日時:</strong><br>
+                        {{ product.last_posted_at.strftime('%Y年%m月%d日 %H:%M') }}
+                    </p>
+                    {% endif %}
+                    
+                    <form action="{{ url_for('create_post', product_id=product.id) }}" method="post">
+                        <button type="submit" class="btn btn-success" {% if not selected_images %}disabled{% endif %}>
+                            投稿作成
+                        </button>
+                        {% if not selected_images %}
+                        <small class="form-text text-muted">投稿を作成するには画像を選択してください</small>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">画像選択</h5>
+                    <span class="badge bg-primary">{{ selected_images|length }}/4 選択中</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">投稿に使用する画像を最大4枚まで選択してください。</p>
+                    
+                    {% if selected_images %}
+                    <div class="mb-4">
+                        <h6>選択済み画像</h6>
+                        <div class="row selected-images" id="selectedImagesContainer">
+                            {% for image in selected_images|sort(attribute='selection_order') %}
+                            <div class="col-md-3 mb-3" data-image-id="{{ image.id }}">
+                                <div class="card selected-image">
+                                    <img src="{{ image.image_url }}" class="card-img-top" alt="サムネイル">
+                                    <div class="card-footer p-2 text-center">
+                                        <small class="text-muted">優先度: {{ image.selection_order }}</small>
+                                        <button class="btn btn-sm btn-danger remove-selection" data-image-id="{{ image.id }}">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button class="btn btn-primary btn-sm mt-2" id="saveOrderBtn">並び順を保存</button>
+                    </div>
+                    {% endif %}
+                    
+                    <form action="{{ url_for('select_images', product_id=product.id) }}" method="post" id="imageSelectionForm">
+                        <div class="row" id="imageGrid">
+                            {% for image in images %}
+                            <div class="col-md-3 col-sm-4 col-6 mb-3">
+                                <div class="card h-100 image-card {% if image.selected %}selected{% endif %}">
+                                    <img src="{{ image.image_url }}" class="card-img-top" alt="サムネイル">
+                                    <div class="card-body p-2 text-center">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="selected_images" 
+                                                value="{{ image.id }}" id="img{{ image.id }}"
+                                                {% if image.selected %}checked{% endif %}
+                                                {% if selected_images|length >= 4 and not image.selected %}disabled{% endif %}>
+                                            <label class="form-check-label" for="img{{ image.id }}">
+                                                選択する
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-primary">選択を保存</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 画像選択の処理
+    const checkboxes = document.querySelectorAll('input[name="selected_images"]');
+    const selectedCount = document.querySelectorAll('input[name="selected_images"]:checked').length;
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const checkedCount = document.querySelectorAll('input[name="selected_images"]:checked').length;
+            
+            // 4枚以上選択できないようにする
+            if (checkedCount >= 4) {
+                checkboxes.forEach(cb => {
+                    if (!cb.checked) {
+                        cb.disabled = true;
+                    }
+                });
+            } else {
+                checkboxes.forEach(cb => {
+                    cb.disabled = false;
+                });
+            }
+            
+            // カードのスタイルを更新
+            const card = this.closest('.image-card');
+            if (this.checked) {
+                card.classList.add('selected');
+            } else {
+                card.classList.remove('selected');
+            }
+            
+            // AJAXで選択状態を保存
+            fetch('{{ url_for("api_select_image") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    image_id: parseInt(this.value),
+                    selected: this.checked
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Selection updated:', data);
+                // 成功時にはページをリロード
+                if (data.success) {
+                    window.location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Error updating selection:', error);
+            });
+        });
+    });
+    
+    // 選択済み画像の並べ替え機能
+    const selectedContainer = document.getElementById('selectedImagesContainer');
+    if (selectedContainer) {
+        const sortable = new Sortable(selectedContainer, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            onEnd: function() {
+                // 並び順を更新
+                updateOrderButton.disabled = false;
+            }
+        });
+        
+        // 並び順保存ボタン
+        const updateOrderButton = document.getElementById('saveOrderBtn');
+        updateOrderButton.addEventListener('click', function() {
+            const imageIds = Array.from(selectedContainer.children).map(
+                el => parseInt(el.dataset.imageId)
+            );
+            
+            fetch('{{ url_for("api_reorder_images") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    image_ids: imageIds
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Order updated:', data);
+                if (data.success) {
+                    updateOrderButton.disabled = true;
+                    // 更新完了メッセージ
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-success mt-2';
+                    alert.textContent = '並び順を保存しました';
+                    updateOrderButton.parentNode.appendChild(alert);
+                    
+                    // 3秒後にアラートを消す
+                    setTimeout(() => {
+                        alert.remove();
+                    }, 3000);
+                }
+            })
+            .catch(error => {
+                console.error('Error updating order:', error);
+            });
+        });
+        
+        // 選択解除ボタン
+        const removeButtons = document.querySelectorAll('.remove-selection');
+        removeButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const imageId = this.dataset.imageId;
+                
+                fetch('{{ url_for("api_select_image") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        image_id: parseInt(imageId),
+                        selected: false
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Selection removed:', data);
+                    if (data.success) {
+                        window.location.reload();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error removing selection:', error);
+                });
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

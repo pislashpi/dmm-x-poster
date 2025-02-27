@@ -1,0 +1,217 @@
+{% extends "layout.html" %}
+
+{% block title %}投稿管理 - DMM X自動投稿システム{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">投稿管理</h1>
+    </div>
+    
+    <!-- フィルター -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form action="{{ url_for('posts') }}" method="get" class="row g-3">
+                <div class="col-md-6">
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="status" id="all" value="" 
+                               {% if not status %}checked{% endif %} autocomplete="off">
+                        <label class="btn btn-outline-secondary" for="all">すべて</label>
+                        
+                        <input type="radio" class="btn-check" name="status" id="scheduled" value="scheduled" 
+                               {% if status == 'scheduled' %}checked{% endif %} autocomplete="off">
+                        <label class="btn btn-outline-warning" for="scheduled">予定済み</label>
+                        
+                        <input type="radio" class="btn-check" name="status" id="posted" value="posted" 
+                               {% if status == 'posted' %}checked{% endif %} autocomplete="off">
+                        <label class="btn btn-outline-success" for="posted">投稿済み</label>
+                        
+                        <input type="radio" class="btn-check" name="status" id="failed" value="failed" 
+                               {% if status == 'failed' %}checked{% endif %} autocomplete="off">
+                        <label class="btn btn-outline-danger" for="failed">失敗</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <select name="sort" class="form-select">
+                        <option value="scheduled" {% if sort == 'scheduled' %}selected{% endif %}>予定日時順</option>
+                        <option value="posted" {% if sort == 'posted' %}selected{% endif %}>投稿日時順</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">適用</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 投稿一覧 -->
+    <div class="card">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs">
+                <li class="nav-item">
+                    <a class="nav-link {% if not status or status == '' %}active{% endif %}" 
+                       href="{{ url_for('posts') }}">
+                        すべて
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if status == 'scheduled' %}active{% endif %}" 
+                       href="{{ url_for('posts', status='scheduled') }}">
+                        予定済み <span class="badge bg-warning text-dark">{{ posts.items|selectattr('status', 'equalto', 'scheduled')|list|length }}</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if status == 'posted' %}active{% endif %}" 
+                       href="{{ url_for('posts', status='posted') }}">
+                        投稿済み <span class="badge bg-success">{{ posts.items|selectattr('status', 'equalto', 'posted')|list|length }}</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if status == 'failed' %}active{% endif %}" 
+                       href="{{ url_for('posts', status='failed') }}">
+                        失敗 <span class="badge bg-danger">{{ posts.items|selectattr('status', 'equalto', 'failed')|list|length }}</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="card-body">
+            {% if posts.items %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th scope="col">状態</th>
+                            <th scope="col">商品タイトル</th>
+                            <th scope="col">予定日時</th>
+                            <th scope="col">投稿日時</th>
+                            <th scope="col">画像数</th>
+                            <th scope="col">アクション</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for post in posts.items %}
+                        <tr>
+                            <td>
+                                {% if post.status == 'scheduled' %}
+                                <span class="badge bg-warning text-dark">予定済み</span>
+                                {% elif post.status == 'posted' %}
+                                <span class="badge bg-success">投稿済み</span>
+                                {% elif post.status == 'failed' %}
+                                <span class="badge bg-danger">失敗</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('product_detail', product_id=post.product_id) }}">
+                                    {{ post.product.title|truncate(40) }}
+                                </a>
+                            </td>
+                            <td>{{ post.scheduled_at.strftime('%Y/%m/%d %H:%M') }}</td>
+                            <td>
+                                {% if post.posted_at %}
+                                {{ post.posted_at.strftime('%Y/%m/%d %H:%M') }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>{{ post.post_images.count() }}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('post_detail', post_id=post.id) }}" class="btn btn-info">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if post.status == 'scheduled' %}
+                                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" 
+                                            data-bs-target="#deleteModal{{ post.id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- 削除確認モーダル -->
+                                <div class="modal fade" id="deleteModal{{ post.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">投稿削除の確認</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p>以下の予定投稿を削除しますか？</p>
+                                                <p><strong>{{ post.product.title }}</strong></p>
+                                                <p>予定日時: {{ post.scheduled_at.strftime('%Y/%m/%d %H:%M') }}</p>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                                                <form action="{{ url_for('delete_post', post_id=post.id) }}" method="post">
+                                                    <button type="submit" class="btn btn-danger">削除する</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>該当する投稿はありません。
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- ページネーション -->
+    {% if posts.pages > 1 %}
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if posts.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('posts', page=posts.prev_num, status=status, sort=sort) }}">
+                    <i class="fas fa-chevron-left"></i> 前へ
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link"><i class="fas fa-chevron-left"></i> 前へ</span>
+            </li>
+            {% endif %}
+            
+            {% for page_num in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if page_num %}
+                    {% if page_num == posts.page %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('posts', page=page_num, status=status, sort=sort) }}">
+                            {{ page_num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if posts.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('posts', page=posts.next_num, status=status, sort=sort) }}">
+                    次へ <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">次へ <i class="fas fa-chevron-right"></i></span>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

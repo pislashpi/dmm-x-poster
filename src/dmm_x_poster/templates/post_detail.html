@@ -1,0 +1,243 @@
+{% extends "layout.html" %}
+
+{% block title %}投稿詳細 - DMM X自動投稿システム{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('index') }}">ホーム</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('posts') }}">投稿管理</a></li>
+            <li class="breadcrumb-item active" aria-current="page">投稿詳細</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">投稿プレビュー</h5>
+                </div>
+                <div class="card-body">
+                    <!-- 投稿状態バッジ -->
+                    <div class="mb-3">
+                        {% if post.status == 'scheduled' %}
+                        <span class="badge bg-warning text-dark">予定済み</span>
+                        {% elif post.status == 'posted' %}
+                        <span class="badge bg-success">投稿済み</span>
+                        {% elif post.status == 'failed' %}
+                        <span class="badge bg-danger">失敗</span>
+                        {% endif %}
+                        
+                        {% if post.status == 'scheduled' %}
+                        <span class="ms-2 text-muted">
+                            {{ post.scheduled_at.strftime('%Y年%m月%d日 %H:%M') }} に投稿予定
+                        </span>
+                        {% elif post.status == 'posted' %}
+                        <span class="ms-2 text-muted">
+                            {{ post.posted_at.strftime('%Y年%m月%d日 %H:%M') }} に投稿済み
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- 投稿テキスト -->
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-2 text-muted">投稿テキスト</h6>
+                            <p class="card-text" style="white-space: pre-line;">{{ post.post_text }}</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 投稿画像プレビュー -->
+                    {% if images %}
+                    <h6 class="mb-3">投稿画像 ({{ images|length }}/4)</h6>
+                    <div class="row">
+                        {% for image in images %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card">
+                                <img src="{{ image.image_url }}" class="card-img-top" alt="投稿画像">
+                                <div class="card-footer p-2 text-center">
+                                    <small class="text-muted">画像 #{{ loop.index }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>この投稿には画像が含まれていません。
+                    </div>
+                    {% endif %}
+                    
+                    <!-- 短縮URL -->
+                    {% if post.short_url %}
+                    <div class="mt-3">
+                        <h6>短縮URL</h6>
+                        <div class="input-group">
+                            <input type="text" class="form-control" value="{{ post.short_url }}" readonly>
+                            <button class="btn btn-outline-secondary copy-btn" type="button" data-clipboard-text="{{ post.short_url }}">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- エラーメッセージ（失敗時） -->
+            {% if post.status == 'failed' and post.error_message %}
+            <div class="card mb-4 border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">エラー情報</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger mb-0">
+                        <h6>エラーメッセージ</h6>
+                        <pre class="mb-0">{{ post.error_message }}</pre>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="col-lg-4">
+            <!-- 商品情報 -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">商品情報</h5>
+                </div>
+                <div class="card-body">
+                    {% if post.product.package_image_url %}
+                    <img src="{{ post.product.package_image_url }}" alt="パッケージ画像" class="img-fluid mb-3">
+                    {% endif %}
+                    
+                    <h5 class="card-title">{{ post.product.title }}</h5>
+                    <p class="card-text">
+                        <small class="text-muted">商品ID: {{ post.product.dmm_product_id }}</small>
+                    </p>
+                    
+                    {% if post.product.get_actresses_list() %}
+                    <p>
+                        <strong>出演者:</strong><br>
+                        {% for actress in post.product.get_actresses_list() %}
+                        <span class="badge bg-info text-dark">{{ actress }}</span>
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+                    
+                    {% if post.product.release_date %}
+                    <p>
+                        <strong>発売日:</strong> {{ post.product.release_date.strftime('%Y年%m月%d日') }}
+                    </p>
+                    {% endif %}
+                    
+                    <a href="{{ post.product.url }}" target="_blank" class="btn btn-primary btn-sm">
+                        <i class="fas fa-external-link-alt me-1"></i>商品ページを開く
+                    </a>
+                    <a href="{{ url_for('product_detail', product_id=post.product_id) }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-info-circle me-1"></i>商品詳細を見る
+                    </a>
+                </div>
+            </div>
+            
+            <!-- アクション -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">アクション</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <!-- 予定投稿の場合、削除ボタンを表示 -->
+                        {% if post.status == 'scheduled' %}
+                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                            <i class="fas fa-trash me-2"></i>投稿をキャンセル
+                        </button>
+                        {% endif %}
+                        
+                        <!-- 失敗した投稿の場合、再試行ボタンを表示 -->
+                        {% if post.status == 'failed' %}
+                        <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#retryModal">
+                            <i class="fas fa-redo me-2"></i>投稿を再試行
+                        </button>
+                        {% endif %}
+                        
+                        <a href="{{ url_for('posts') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>投稿一覧に戻る
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 削除確認モーダル -->
+{% if post.status == 'scheduled' %}
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">投稿キャンセルの確認</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>以下の予定投稿をキャンセルしますか？</p>
+                <p><strong>{{ post.product.title }}</strong></p>
+                <p>予定日時: {{ post.scheduled_at.strftime('%Y年%m月%d日 %H:%M') }}</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">いいえ</button>
+                <form action="{{ url_for('delete_post', post_id=post.id) }}" method="post">
+                    <button type="submit" class="btn btn-danger">はい、キャンセルします</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 再試行確認モーダル -->
+{% if post.status == 'failed' %}
+<div class="modal fade" id="retryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">投稿再試行の確認</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>この投稿を再試行しますか？</p>
+                <p><strong>{{ post.product.title }}</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">いいえ</button>
+                <form action="#" method="post">
+                    <button type="submit" class="btn btn-warning">はい、再試行します</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // クリップボードコピー機能
+    var clipboard = new ClipboardJS('.copy-btn');
+    
+    clipboard.on('success', function(e) {
+        var button = e.trigger;
+        button.innerHTML = '<i class="fas fa-check"></i>';
+        
+        setTimeout(function() {
+            button.innerHTML = '<i class="fas fa-copy"></i>';
+        }, 2000);
+        
+        e.clearSelection();
+    });
+});
+</script>
+{% endblock %}

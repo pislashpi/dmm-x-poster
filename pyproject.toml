@@ -1,0 +1,41 @@
+[project]
+name = "dmm-x-poster"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "pislashpi", email = "123241027+pislashpi@users.noreply.github.com" }
+]
+dependencies = [
+    "flask>=3.1.0",
+    "flask-wtf>=1.2.2",
+    "flask-sqlalchemy>=3.1.1",
+    "flask-migrate>=4.1.0",
+    "flask-login>=0.6.3",
+    "pillow>=11.1.0",
+    "requests>=2.32.3",
+    "tweepy>=4.15.0",
+    "pyshorteners>=1.0.1",
+    "python-dotenv>=1.0.1",
+    "schedule>=1.2.2",
+    "apscheduler>=3.11.0",
+    "beautifulsoup4>=4.13.3",
+    "lxml>=5.3.1",
+    "gunicorn>=23.0.0",
+    "pytest>=8.3.4",
+]
+readme = "README.md"
+requires-python = ">= 3.8"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dmm_x_poster"]

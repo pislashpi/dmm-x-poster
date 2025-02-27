@@ -1,0 +1,152 @@
+{% extends "layout.html" %}
+
+{% block title %}商品一覧 - DMM X自動投稿システム{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">商品一覧</h1>
+        <form action="{{ url_for('fetch_new') }}" method="post" class="d-flex">
+            <input type="number" name="hits" class="form-control me-2" value="20" min="1" max="100">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-sync-alt me-1"></i>新着取得
+            </button>
+        </form>
+    </div>
+    
+    <!-- 検索・フィルター -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form action="{{ url_for('products') }}" method="get" class="row g-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" name="keyword" class="form-control" placeholder="タイトルで検索..." value="{{ keyword }}">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <select name="sort" class="form-select">
+                        <option value="latest" {% if sort == 'latest' %}selected{% endif %}>新着順</option>
+                        <option value="title" {% if sort == 'title' %}selected{% endif %}>タイトル順</option>
+                        <option value="release" {% if sort == 'release' %}selected{% endif %}>発売日順</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">適用</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 商品一覧 -->
+    <div class="row">
+        {% for product in products.items %}
+        <div class="col-md-3 col-sm-6 mb-4">
+            <div class="card h-100">
+                {% if product.package_image_url %}
+                <img src="{{ product.package_image_url }}" class="card-img-top" alt="パッケージ画像" 
+                     style="height: 250px; object-fit: cover;">
+                {% else %}
+                <div class="bg-light text-center py-5" style="height: 250px;">
+                    <i class="fas fa-image fa-4x text-muted mt-5"></i>
+                </div>
+                {% endif %}
+                <div class="card-body">
+                    <h5 class="card-title" style="font-size: 1rem;">{{ product.title|truncate(50) }}</h5>
+                    
+                    {% if product.get_actresses_list() %}
+                    <p class="card-text mb-2">
+                        <small>
+                            <strong>出演:</strong>
+                            {% for actress in product.get_actresses_list()[:2] %}
+                            <span class="badge bg-info text-dark">{{ actress }}</span>
+                            {% endfor %}
+                            {% if product.get_actresses_list()|length > 2 %}
+                            <span class="badge bg-secondary">+{{ product.get_actresses_list()|length - 2 }}</span>
+                            {% endif %}
+                        </small>
+                    </p>
+                    {% endif %}
+                    
+                    {% if product.release_date %}
+                    <p class="card-text mb-2">
+                        <small class="text-muted">
+                            <i class="far fa-calendar-alt me-1"></i>{{ product.release_date.strftime('%Y/%m/%d') }}
+                        </small>
+                    </p>
+                    {% endif %}
+                    
+                    <p class="card-text">
+                        <span class="badge {% if product.posted %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                            {% if product.posted %}投稿済み{% else %}未投稿{% endif %}
+                        </span>
+                    </p>
+                </div>
+                <div class="card-footer bg-transparent border-top-0">
+                    <a href="{{ url_for('product_detail', product_id=product.id) }}" class="btn btn-primary btn-sm w-100">
+                        詳細を見る
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>商品が見つかりませんでした。検索条件を変更するか、新しい商品を取得してください。
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- ページネーション -->
+    {% if products.pages > 1 %}
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if products.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('products', page=products.prev_num, keyword=keyword, sort=sort) }}">
+                    <i class="fas fa-chevron-left"></i> 前へ
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link"><i class="fas fa-chevron-left"></i> 前へ</span>
+            </li>
+            {% endif %}
+            
+            {% for page_num in products.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if page_num %}
+                    {% if page_num == products.page %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('products', page=page_num, keyword=keyword, sort=sort) }}">
+                            {{ page_num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if products.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('products', page=products.next_num, keyword=keyword, sort=sort) }}">
+                    次へ <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">次へ <i class="fas fa-chevron-right"></i></span>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

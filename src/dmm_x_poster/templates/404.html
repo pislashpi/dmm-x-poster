@@ -1,0 +1,24 @@
+<!-- 404.html -->
+{% extends "layout.html" %}
+
+{% block title %}404 - ページが見つかりません{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 text-center">
+            <div class="card mb-4">
+                <div class="card-body py-5">
+                    <h1 class="display-1 text-muted">404</h1>
+                    <h3 class="mb-4">ページが見つかりません</h3>
+                    <p class="lead mb-4">お探しのページは存在しないか、移動した可能性があります。</p>
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">
+                        <i class="fas fa-home me-2"></i>ホームに戻る
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
