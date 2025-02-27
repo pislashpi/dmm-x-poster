@@ -24,8 +24,7 @@ class Config:
     TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN')
     TWITTER_ACCESS_SECRET = os.environ.get('TWITTER_ACCESS_SECRET')
     
-    # 短縮URL設定（Bitly）
-    BITLY_API_KEY = os.environ.get('BITLY_API_KEY')
+    # 短縮URL設定（削除済み - Xの自動短縮機能を使用）
     
     # 画像保存設定
     IMAGES_FOLDER = os.path.join('static', 'images')

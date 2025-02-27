@@ -5,7 +5,7 @@ import os
 import tweepy
 import logging
 from flask import current_app
-from datetime import datetime
+from datetime import datetime, UTC
 
 from dmm_x_poster.db.models import db, Post, Image, PostImage
 
@@ -63,7 +63,7 @@ class TwitterAPIService:
             return False
         
         # 投稿データを取得
-        post = Post.query.get(post_id)
+        post = db.session.get(Post, post_id)
         if not post:
             logger.error(f"Post not found: {post_id}")
             return False
@@ -80,7 +80,7 @@ class TwitterAPIService:
                 
                 # 投稿成功を記録
                 post.status = 'posted'
-                post.posted_at = datetime.utcnow()
+                post.posted_at = datetime.now(UTC)
                 db.session.commit()
                 logger.info(f"Posted text-only tweet: {tweet_id}")
                 return True
@@ -105,7 +105,7 @@ class TwitterAPIService:
                 
                 # 投稿成功を記録
                 post.status = 'posted'
-                post.posted_at = datetime.utcnow()
+                post.posted_at = datetime.now(UTC)
                 db.session.commit()
                 logger.info(f"Posted tweet with media: {tweet_id}")
                 return True
@@ -131,7 +131,7 @@ class TwitterAPIService:
             logger.error("Twitter API not authenticated")
             return 0
         
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         posts = Post.query.filter_by(status='scheduled').filter(
             Post.scheduled_at <= now
         ).all()

@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from flask import current_app
 
 from dmm_x_poster.db.models import db, Product, Post, Image, PostImage
-from dmm_x_poster.services.url_shortener import url_shortener_service
 from dmm_x_poster.services.twitter_api import twitter_api_service
 
 logger = logging.getLogger(__name__)
@@ -49,11 +48,9 @@ class SchedulerService:
             selected_genres = genres[:3] if len(genres) > 3 else genres
             text += f"\nジャンル: {', '.join(selected_genres)}"
         
-        # 短縮URLを追加
-        if product.url and url_shortener_service:
-            short_url = url_shortener_service.shorten_url(product.url)
-            if short_url:
-                text += f"\n{short_url}"
+        # 元のURLを追加（Xが自動的に短縮）
+        if product.url:
+            text += f"\n{product.url}"
         
         return text
     
@@ -70,11 +67,6 @@ class SchedulerService:
             logger.warning(f"No selected images for product: {product_id}")
             return None
         
-        # 短縮URLを生成
-        short_url = None
-        if url_shortener_service:
-            short_url = url_shortener_service.shorten_url(product.url)
-        
         # 投稿テキストを生成
         post_text = self.generate_post_text(product)
         
@@ -85,7 +77,6 @@ class SchedulerService:
         post = Post(
             product_id=product_id,
             post_text=post_text,
-            short_url=short_url,
             status='scheduled',
             scheduled_at=next_time
         )

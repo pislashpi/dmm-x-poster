@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import pytest
+from datetime import datetime, UTC
 from flask import Flask
 from flask.testing import FlaskClient
 
@@ -28,7 +29,6 @@ class TestConfig:
     TWITTER_API_SECRET = "test_twitter_secret" 
     TWITTER_ACCESS_TOKEN = "test_twitter_token"
     TWITTER_ACCESS_SECRET = "test_twitter_token_secret"
-    BITLY_API_KEY = "test_bitly_key"
     
     # 画像フォルダをテンポラリディレクトリに設定
     IMAGES_FOLDER = os.path.join(tempfile.gettempdir(), "test_images")
@@ -98,7 +98,7 @@ def sample_product(db):
         maker="サンプルメーカー",
         genres=json.dumps(["ジャンルA", "ジャンルB"], ensure_ascii=False),
         release_date=datetime.date(2023, 1, 15),
-        fetched_at=datetime.datetime.utcnow(),
+        fetched_at=datetime.datetime.now(UTC),
         posted=False
     )
     
@@ -122,7 +122,7 @@ def sample_images(db, sample_product):
             downloaded=False,
             selected=(i < 4),  # 最初の4枚は選択済み
             selection_order=(i + 1) if i < 4 else None,  # 選択済みの場合は順序付け
-            created_at=datetime.datetime.utcnow()
+            created_at=datetime.datetime.now(UTC)
         )
         db.session.add(image)
         images.append(image)

@@ -74,7 +74,6 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
     post_text = db.Column(db.Text)
-    short_url = db.Column(db.Text)
     status = db.Column(db.String(20), default='scheduled')  # scheduled, posted, failed
     scheduled_at = db.Column(db.DateTime, nullable=False)
     posted_at = db.Column(db.DateTime)

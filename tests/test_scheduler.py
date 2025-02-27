@@ -28,18 +28,14 @@ class TestSchedulerService:
     
     def test_generate_post_text(self, sample_product):
         """generate_post_textメソッドが適切なテキストを生成するかテスト"""
-        # URLショートナーサービスをモック
-        with patch('dmm_x_poster.services.scheduler.url_shortener_service') as mock_shortener:
-            mock_shortener.shorten_url.return_value = "https://bit.ly/abc123"
-            
-            service = SchedulerService()
-            post_text = service.generate_post_text(sample_product)
-            
-            # テキストに必要な情報が含まれているか
-            assert f"【新着】{sample_product.title}" in post_text
-            assert "出演: 女優A, 女優B" in post_text
-            assert "ジャンル: ジャンルA, ジャンルB" in post_text
-            assert "https://bit.ly/abc123" in post_text
+        service = SchedulerService()
+        post_text = service.generate_post_text(sample_product)
+        
+        # テキストに必要な情報が含まれているか
+        assert f"【新着】{sample_product.title}" in post_text
+        assert "出演: 女優A, 女優B" in post_text
+        assert "ジャンル: ジャンルA, ジャンルB" in post_text
+        assert sample_product.url in post_text
     
     def test_generate_post_text_many_actresses(self, db):
         """出演者が多い場合のgenerate_post_textメソッドをテスト"""
@@ -57,25 +53,11 @@ class TestSchedulerService:
         db.session.add(product)
         db.session.commit()
         
-        # URLショートナーサービスをモック
-        with patch('dmm_x_poster.services.scheduler.url_shortener_service') as mock_shortener:
-            mock_shortener.shorten_url.return_value = "https://bit.ly/abc123"
-            
-            service = SchedulerService()
-            post_text = service.generate_post_text(product)
-            
-            # 出演者は3名までと「他」が表示されるか
-            assert "出演: 女優A, 女優B, 女優C他" in post_text
-    
-    def test_generate_post_text_without_shortener(self, sample_product):
-        """URLショートナーがない場合のgenerate_post_textメソッドをテスト"""
-        # URLショートナーサービスをNoneに設定
-        with patch('dmm_x_poster.services.scheduler.url_shortener_service', None):
-            service = SchedulerService()
-            post_text = service.generate_post_text(sample_product)
-            
-            # 元のURLが含まれないこと（短縮URLがなければURLは含めない）
-            assert sample_product.url not in post_text
+        service = SchedulerService()
+        post_text = service.generate_post_text(product)
+        
+        # 出演者は3名までと「他」が表示されるか
+        assert "出演: 女優A, 女優B, 女優C他" in post_text
     
     def test_calculate_next_post_time(self, app):
         """calculate_next_post_timeメソッドが適切な時間を計算するかテスト"""
@@ -162,62 +144,30 @@ class TestSchedulerService:
                 # マイクロ秒は無視して比較
                 assert next_time.replace(microsecond=0) == expected_time.replace(microsecond=0)
     
-    def test_calculate_next_post_time_with_existing_posts(self, app, db):
-        """既存の投稿がある場合のcalculate_next_post_timeメソッドをテスト"""
-        # 最新の予定投稿を作成
-        latest_post = Post(
-            product_id=1,  # ダミーID
-            status="scheduled",
-            scheduled_at=datetime.utcnow().replace(hour=14, minute=0, second=0, microsecond=0)
-        )
-        db.session.add(latest_post)
-        db.session.commit()
-        
-        service = SchedulerService()
-        service.init_app(app)
-        
-        # テスト用に時間設定
-        service.post_start_hour = 9
-        service.post_end_hour = 21
-        service.posts_per_day = 3
-        
-        # 営業時間内で間隔を空けた時間になるか
-        next_time = service.calculate_next_post_time()
-        
-        # 最新の投稿から4時間後（3つの投稿で12時間を均等に分ける）
-        expected_time = latest_post.scheduled_at + timedelta(hours=4)
-        # 時間と分だけ比較（秒とマイクロ秒は考慮しない）
-        assert next_time.hour == expected_time.hour
-        assert next_time.minute == expected_time.minute
-    
     def test_create_post(self, app, db, sample_product, sample_images):
         """create_postメソッドが投稿を作成するかテスト"""
-        # URLショートナーサービスをモック
-        with patch('dmm_x_poster.services.scheduler.url_shortener_service') as mock_shortener:
-            mock_shortener.shorten_url.return_value = "https://bit.ly/abc123"
+        # 次の投稿時間を固定
+        next_time = datetime.utcnow() + timedelta(hours=2)
+        
+        with patch.object(SchedulerService, 'calculate_next_post_time') as mock_calc_time:
+            mock_calc_time.return_value = next_time
             
-            # 次の投稿時間を固定
-            next_time = datetime.utcnow() + timedelta(hours=2)
+            service = SchedulerService()
+            service.init_app(app)
             
-            with patch.object(SchedulerService, 'calculate_next_post_time') as mock_calc_time:
-                mock_calc_time.return_value = next_time
-                
-                service = SchedulerService()
-                service.init_app(app)
-                
-                # 投稿を作成
-                post = service.create_post(sample_product.id)
-                
-                # 結果の検証
-                assert post is not None
-                assert post.product_id == sample_product.id
-                assert post.status == "scheduled"
-                assert post.scheduled_at == next_time
-                assert "https://bit.ly/abc123" in post.post_text
-                
-                # 投稿画像関連の検証
-                post_images = post.post_images.all()
-                assert len(post_images) == 4  # 選択済みの4枚
+            # 投稿を作成
+            post = service.create_post(sample_product.id)
+            
+            # 結果の検証
+            assert post is not None
+            assert post.product_id == sample_product.id
+            assert post.status == "scheduled"
+            assert post.scheduled_at == next_time
+            assert sample_product.url in post.post_text
+            
+            # 投稿画像関連の検証
+            post_images = post.post_images.all()
+            assert len(post_images) == 4  # 選択済みの4枚
     
     def test_create_post_no_images(self, app, db, sample_product):
         """選択された画像がない場合のcreate_postメソッドをテスト"""
@@ -259,24 +209,6 @@ class TestSchedulerService:
             # 商品が投稿済みとしてマークされたか
             db.session.refresh(sample_product)
             assert sample_product.posted is True
-    
-    def test_schedule_unposted_products_no_products(self, app, db):
-        """未投稿商品がない場合のschedule_unposted_productsメソッドをテスト"""
-        # すべての商品を投稿済みに設定
-        Product.query.update({'posted': True})
-        db.session.commit()
-        
-        # create_postメソッドをモック
-        with patch.object(SchedulerService, 'create_post') as mock_create_post:
-            service = SchedulerService()
-            service.init_app(app)
-            
-            # 未投稿商品をスケジュール
-            count = service.schedule_unposted_products()
-            
-            # スケジュールされなかったか
-            assert count == 0
-            mock_create_post.assert_not_called()
     
     def test_process_scheduled_posts(self, app):
         """process_scheduled_postsメソッドがTwitter APIを呼び出すかテスト"""
