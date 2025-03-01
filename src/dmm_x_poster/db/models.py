@@ -5,6 +5,7 @@ import json
 import datetime
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import declarative_base
+from dmm_x_poster.config import JST
 
 db = SQLAlchemy()
 Base = declarative_base()
@@ -22,7 +23,7 @@ class Product(db.Model):
     maker = db.Column(db.Text)
     genres = db.Column(db.Text)  # JSON形式
     release_date = db.Column(db.Date)
-    fetched_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    fetched_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(JST))
     posted = db.Column(db.Boolean, default=False)
     last_posted_at = db.Column(db.DateTime)
     
@@ -61,7 +62,8 @@ class Image(db.Model):
     downloaded = db.Column(db.Boolean, default=False)
     selected = db.Column(db.Boolean, default=False)
     selection_order = db.Column(db.Integer)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    image_type = db.Column(db.String(20), default='sample')  # 'sample', 'package', 'movie'
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(JST))
     
     # リレーションシップ
     post_images = db.relationship('PostImage', backref='image', lazy='dynamic', cascade='all, delete-orphan')

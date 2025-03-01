@@ -2,10 +2,14 @@
 アプリケーション設定
 """
 import os
+from datetime import timezone, timedelta
 from dotenv import load_dotenv
 
 # .envファイルを読み込む
 load_dotenv()
+
+# 日本標準時のタイムゾーン定義
+JST = timezone(timedelta(hours=9))
 
 class Config:
     """アプリケーション設定クラス"""

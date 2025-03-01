@@ -4,10 +4,11 @@ DMM APIと連携するサービスモジュール
 import json
 import requests
 import logging
-from datetime import datetime, UTC
+from datetime import datetime
 from urllib.parse import urlencode
 from flask import current_app
 
+from dmm_x_poster.config import JST
 from dmm_x_poster.db.models import db, Product, Image
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class DMMAPIService:
             'api_id': self.api_id,
             'affiliate_id': self.affiliate_id,
             'site': 'FANZA',
+            'service': 'digital',  # serviceパラメータを追加
             'output': 'json',
             'hits': 20,
         }
@@ -41,9 +43,18 @@ class DMMAPIService:
         params.update(kwargs)
         return params
     
-    def search_items(self, floor='dvd', sort='date', **kwargs):
+    def search_items(self, floor='videoa', sort='date', article=None, article_id=None, **kwargs):
         """商品検索を実行"""
         params = self.get_params(floor=floor, sort=sort, **kwargs)
+        
+        # article（ジャンル指定）が提供されている場合は追加
+        if article:
+            params['article'] = article
+        
+        # article_id（ジャンルID）が提供されている場合は追加
+        if article_id:
+            params['article_id'] = article_id
+            
         url = f"{self.BASE_URL}?{urlencode(params)}"
         
         try:
@@ -108,21 +119,56 @@ class DMMAPIService:
                     maker=item.get('iteminfo', {}).get('maker', [{}])[0].get('name', ''),
                     genres=json.dumps(genres, ensure_ascii=False),
                     release_date=release_date,
-                    fetched_at=datetime.now(UTC)
+                    fetched_at=datetime.now(JST)
                 )
                 
                 db.session.add(product)
                 db.session.flush()  # IDを生成するためにflush
                 
+                # パッケージ画像を保存（選択可能にするため）
+                if 'imageURL' in item and 'large' in item['imageURL']:
+                    package_image = Image(
+                        product_id=product.id,
+                        image_url=item['imageURL']['large'],
+                        image_type='package',  # 種類を示す属性を追加
+                        created_at=datetime.now(JST)
+                    )
+                    db.session.add(package_image)
+                
                 # サムネイル画像を保存
-                if 'sampleImageURL' in item and 'sample_s' in item['sampleImageURL']:
-                    for i, img_url in enumerate(item['sampleImageURL']['sample_s']):
-                        image = Image(
-                            product_id=product.id,
-                            image_url=img_url,
-                            created_at=datetime.now(UTC)
-                        )
-                        db.session.add(image)
+                if 'sampleImageURL' in item:
+                    # sample_s.image の取得
+                    if 'sample_s' in item['sampleImageURL'] and 'image' in item['sampleImageURL']['sample_s']:
+                        sample_images = item['sampleImageURL']['sample_s']['image']
+                        for i, img_url in enumerate(sample_images):
+                            image = Image(
+                                product_id=product.id,
+                                image_url=img_url,
+                                image_type='sample',  # 種類を示す属性を追加
+                                created_at=datetime.now(JST)
+                            )
+                            db.session.add(image)
+                
+                # サンプルムービーを保存 - APIレスポンスの構造に合わせて修正
+                if 'samplemovieURL' in item:
+                    # 利用可能なサイズを優先順位で試す
+                    movie_sizes = ['size_720_480', 'size_644_414', 'size_560_360', 'size_476_306']
+                    
+                    for size in movie_sizes:
+                        if size in item['samplemovieURL'] and item['samplemovieURL'][size]:
+                            movie_url = item['samplemovieURL'][size]
+                            
+                            if movie_url:  # URLが存在するか確認
+                                movie = Image(
+                                    product_id=product.id,
+                                    image_url=movie_url,
+                                    image_type='movie',  # 種類を示す属性を追加
+                                    created_at=datetime.now(JST)
+                                )
+                                db.session.add(movie)
+                                logger.info(f"Added movie URL ({size}): {movie_url}")
+                                # 1つのサイズが見つかれば十分
+                                break
                 
                 saved_count += 1
                 

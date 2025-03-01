@@ -8,6 +8,9 @@
         <h1 class="h3">商品一覧</h1>
         <form action="{{ url_for('fetch_new') }}" method="post" class="d-flex">
             <input type="number" name="hits" class="form-control me-2" value="20" min="1" max="100">
+            <input type="hidden" name="floor" value="videoa">
+            <input type="hidden" name="article" value="genre">
+            <input type="text" name="article_id" class="form-control me-2" placeholder="ジャンルID（任意）">
             <button type="submit" class="btn btn-primary">
                 <i class="fas fa-sync-alt me-1"></i>新着取得
             </button>
@@ -18,18 +21,22 @@
     <div class="card mb-4">
         <div class="card-body">
             <form action="{{ url_for('products') }}" method="get" class="row g-3">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-search"></i></span>
                         <input type="text" name="keyword" class="form-control" placeholder="タイトルで検索..." value="{{ keyword }}">
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <select name="sort" class="form-select">
                         <option value="latest" {% if sort == 'latest' %}selected{% endif %}>新着順</option>
                         <option value="title" {% if sort == 'title' %}selected{% endif %}>タイトル順</option>
                         <option value="release" {% if sort == 'release' %}selected{% endif %}>発売日順</option>
                     </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" name="article_id" class="form-control" placeholder="ジャンルID" value="{{ article_id }}">
+                    <input type="hidden" name="article" value="genre">
                 </div>
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-primary w-100">適用</button>
@@ -104,7 +111,7 @@
         <ul class="pagination justify-content-center">
             {% if products.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('products', page=products.prev_num, keyword=keyword, sort=sort) }}">
+                <a class="page-link" href="{{ url_for('products', page=products.prev_num, keyword=keyword, sort=sort, article=article, article_id=article_id) }}">
                     <i class="fas fa-chevron-left"></i> 前へ
                 </a>
             </li>
@@ -122,7 +129,7 @@
                     </li>
                     {% else %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('products', page=page_num, keyword=keyword, sort=sort) }}">
+                        <a class="page-link" href="{{ url_for('products', page=page_num, keyword=keyword, sort=sort, article=article, article_id=article_id) }}">
                             {{ page_num }}
                         </a>
                     </li>
@@ -136,7 +143,7 @@
             
             {% if products.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('products', page=products.next_num, keyword=keyword, sort=sort) }}">
+                <a class="page-link" href="{{ url_for('products', page=products.next_num, keyword=keyword, sort=sort, article=article, article_id=article_id) }}">
                     次へ <i class="fas fa-chevron-right"></i>
                 </a>
             </li>

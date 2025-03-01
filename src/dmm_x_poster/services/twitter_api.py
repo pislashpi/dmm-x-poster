@@ -5,8 +5,9 @@ import os
 import tweepy
 import logging
 from flask import current_app
-from datetime import datetime, UTC
+from datetime import datetime, timezone, UTC
 
+from dmm_x_poster.config import JST
 from dmm_x_poster.db.models import db, Post, Image, PostImage
 
 # Tweepyからの無効なエスケープシーケンス警告を抑制
@@ -56,6 +57,13 @@ class TwitterAPIService:
         """API認証状態をチェック"""
         return self.api is not None and self.client is not None
     
+    def jst_to_utc(jst_datetime):
+        """JSTからUTCに変換"""
+        if jst_datetime.tzinfo is None:
+            # タイムゾーン情報がない場合はJSTと仮定
+            jst_datetime = jst_datetime.replace(tzinfo=JST)
+        return jst_datetime.astimezone(timezone.utc)
+    
     def post_with_media(self, post_id):
         """画像付きツイートを投稿"""
         if not self.is_authenticated():
@@ -73,30 +81,73 @@ class TwitterAPIService:
             media_ids = []
             images = post.get_images()
             
+            logger.info(f"Post {post_id} has {len(images)} images")
+            
             # 画像がない場合はテキストのみ投稿
             if not images:
+                logger.warning(f"No images found for post {post_id}")
                 response = self.client.create_tweet(text=post.post_text)
+                tweet_id = response.data['id']
+                
+                # 投稿成功を記録
+                post.status = 'posted'
+                post.posted_at = datetime.now(JST)
+                db.session.commit()
+                logger.info(f"Posted text-only tweet: {tweet_id}")
+                return True
+            
+            # 画像と動画を処理
+            movie_images = [img for img in images if hasattr(img, 'image_type') and img.image_type == 'movie']
+            standard_images = [img for img in images if not hasattr(img, 'image_type') or img.image_type != 'movie']
+            
+            logger.info(f"Found {len(movie_images)} movie images and {len(standard_images)} standard images")
+            
+            # まずは動画かどうかチェック
+            if movie_images:
+                # 動画投稿の際のロジック（今回はURL添付のみ）
+                logger.info("Detected video content, adding URL to tweet")
+                movie_urls = [img.image_url for img in movie_images if img.image_url]
+                tweet_text = post.post_text
+                
+                if movie_urls:
+                    tweet_text = f"{tweet_text}\n\n動画: {movie_urls[0]}"
+                
+                response = self.client.create_tweet(text=tweet_text)
                 tweet_id = response.data['id']
                 
                 # 投稿成功を記録
                 post.status = 'posted'
                 post.posted_at = datetime.now(UTC)
                 db.session.commit()
-                logger.info(f"Posted text-only tweet: {tweet_id}")
+                logger.info(f"Posted tweet with video URL: {tweet_id}")
                 return True
-            
-            # 画像を処理
-            for image in images:
-                if not image.local_path or not os.path.exists(image.local_path):
+                
+            # 通常の画像投稿処理
+            for image in standard_images:
+                # ローカルファイルパスの確認
+                if not image.local_path:
+                    logger.warning(f"Image {image.id} has no local_path")
+                    continue
+                    
+                # ファイルの存在確認
+                if not os.path.exists(image.local_path):
                     logger.warning(f"Image file not found: {image.local_path}")
                     continue
                 
-                # 画像をアップロード
-                media = self.api.media_upload(image.local_path)
-                media_ids.append(media.media_id)
+                try:
+                    # 画像をアップロード
+                    local_path = os.path.join(current_app.root_path, image.local_path)
+                    logger.info(f"Uploading image from {local_path}")
+                    media = self.api.media_upload(local_path)
+                    media_ids.append(media.media_id)
+                    logger.info(f"Successfully uploaded media ID: {media.media_id}")
+                except Exception as e:
+                    logger.error(f"Error uploading media: {e}")
+                    continue
             
             # 投稿を作成
             if media_ids:
+                logger.info(f"Creating tweet with {len(media_ids)} media attachments")
                 response = self.client.create_tweet(
                     text=post.post_text,
                     media_ids=media_ids
@@ -113,7 +164,7 @@ class TwitterAPIService:
                 # 画像処理に失敗した場合
                 logger.error("Failed to upload any media")
                 post.status = 'failed'
-                post.error_message = "Failed to upload media files"
+                post.error_message = "Failed to upload media files. Check if images exist and are accessible."
                 db.session.commit()
                 return False
             
@@ -131,7 +182,10 @@ class TwitterAPIService:
             logger.error("Twitter API not authenticated")
             return 0
         
-        now = datetime.now(UTC)
+        # 現在時刻（JST）
+        now = datetime.now(JST)
+        
+        # 予定投稿を検索（JST）
         posts = Post.query.filter_by(status='scheduled').filter(
             Post.scheduled_at <= now
         ).all()

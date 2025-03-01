@@ -90,6 +90,22 @@
                     {% endif %}
                     
                     <form action="{{ url_for('create_post', product_id=product.id) }}" method="post">
+                        <div class="mb-3">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="post_type" id="post_now" value="now" checked>
+                                <label class="form-check-label" for="post_now">即時投稿</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="post_type" id="post_scheduled" value="scheduled">
+                                <label class="form-check-label" for="post_scheduled">予約投稿</label>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3" id="schedule_date_container" style="display: none;">
+                            <label for="scheduled_at" class="form-label">投稿日時</label>
+                            <input type="datetime-local" class="form-control" id="scheduled_at" name="scheduled_at">
+                        </div>
+                        
                         <button type="submit" class="btn btn-success" {% if not selected_images %}disabled{% endif %}>
                             投稿作成
                         </button>
@@ -97,6 +113,23 @@
                         <small class="form-text text-muted">投稿を作成するには画像を選択してください</small>
                         {% endif %}
                     </form>
+                    
+                    <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const postTypeRadios = document.querySelectorAll('input[name="post_type"]');
+                        const scheduleDateContainer = document.getElementById('schedule_date_container');
+                        
+                        postTypeRadios.forEach(radio => {
+                            radio.addEventListener('change', function() {
+                                if (this.value === 'scheduled') {
+                                    scheduleDateContainer.style.display = 'block';
+                                } else {
+                                    scheduleDateContainer.style.display = 'none';
+                                }
+                            });
+                        });
+                    });
+                    </script>
                 </div>
             </div>
         </div>
@@ -137,7 +170,22 @@
                             {% for image in images %}
                             <div class="col-md-3 col-sm-4 col-6 mb-3">
                                 <div class="card h-100 image-card {% if image.selected %}selected{% endif %}">
-                                    <img src="{{ image.image_url }}" class="card-img-top" alt="サムネイル">
+                                    {% if image.image_type == 'movie' %}
+                                        <div class="card-img-top" style="position: relative; height: 160px;">
+                                            <video style="width: 100%; height: 100%; object-fit: cover;"
+                                                   src="{{ image.image_url }}" controls poster="{{ product.package_image_url }}"></video>
+                                            <span class="badge bg-danger position-absolute" style="top: 5px; right: 5px;">
+                                                動画
+                                            </span>
+                                        </div>
+                                    {% else %}
+                                        <img src="{{ image.image_url }}" class="card-img-top" alt="サムネイル">
+                                        {% if image.image_type == 'package' %}
+                                            <span class="badge bg-primary position-absolute" style="top: 5px; right: 5px;">
+                                                パッケージ
+                                            </span>
+                                        {% endif %}
+                                    {% endif %}
                                     <div class="card-body p-2 text-center">
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" name="selected_images" 
@@ -169,6 +217,37 @@
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // 日付入力の初期値を現在のJST時刻にする
+    const scheduledAtInput = document.getElementById('scheduled_at');
+    if (scheduledAtInput) {
+        // 現在時刻の1時間後を初期値に設定
+        const now = new Date();
+        now.setHours(now.getHours() + 1);
+        
+        // YYYY-MM-DDThh:mm形式に変換
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        
+        scheduledAtInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+    
+    // 投稿タイプの切り替え処理
+    const postTypeRadios = document.querySelectorAll('input[name="post_type"]');
+    const scheduleDateContainer = document.getElementById('schedule_date_container');
+    
+    postTypeRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            if (this.value === 'scheduled') {
+                scheduleDateContainer.style.display = 'block';
+            } else {
+                scheduleDateContainer.style.display = 'none';
+            }
+        });
+    });
+    
     // 画像選択の処理
     const checkboxes = document.querySelectorAll('input[name="selected_images"]');
     const selectedCount = document.querySelectorAll('input[name="selected_images"]:checked').length;

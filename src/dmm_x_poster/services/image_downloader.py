@@ -36,33 +36,63 @@ class ImageDownloaderService:
             logger.error(f"Image not found: {image_id}")
             return False
         
-        if image.downloaded and image.local_path and os.path.exists(image.local_path):
+        if image.downloaded and image.local_path and os.path.exists(os.path.join(current_app.root_path, image.local_path)):
             logger.info(f"Image already downloaded: {image_id}")
             return True
         
         try:
-            # 画像URLから取得
-            response = requests.get(image.image_url, timeout=10)
-            response.raise_for_status()
+            # 画像タイプに応じた処理
+            image_type = getattr(image, 'image_type', 'sample')
             
-            # 画像形式を検証
-            img = PILImage.open(BytesIO(response.content))
-            
-            # 保存先パスを生成
-            filename = f"product_{image.product_id}_image_{image.id}.{img.format.lower()}"
-            save_path = os.path.join(self.images_folder, filename)
-            
-            # 画像を保存
-            img.save(save_path)
-            
-            # データベースを更新
-            image.local_path = os.path.join(current_app.config.get('IMAGES_FOLDER'), filename)
-            image.downloaded = True
-            db.session.commit()
-            
-            logger.info(f"Downloaded image: {image_id} to {save_path}")
-            return True
-            
+            # 動画の場合は特別処理
+            if image_type == 'movie':
+                # 動画の場合はURLを保存するだけ（実際のダウンロードはしない）
+                # 保存先パスを生成（実際にはファイルは保存しない）
+                filename = f"product_{image.product_id}_movie_{image.id}.mp4"
+                save_path = os.path.join(self.images_folder, filename)
+                
+                # データベースを更新
+                image.local_path = os.path.join(current_app.config.get('IMAGES_FOLDER'), filename)
+                image.downloaded = True  # ダウンロード済みとマーク
+                db.session.commit()
+                
+                logger.info(f"Stored movie URL for image: {image_id}")
+                return True
+            else:
+                # 画像URLから取得
+                logger.info(f"Downloading image {image_id} from URL: {image.image_url}")
+                response = requests.get(image.image_url, timeout=10)
+                response.raise_for_status()
+                
+                # 画像形式を検証
+                img = PILImage.open(BytesIO(response.content))
+                
+                # 保存先パスを生成
+                extension = img.format.lower() if img.format else 'jpg'
+                if image_type == 'package':
+                    filename = f"product_{image.product_id}_package_{image.id}.{extension}"
+                else:
+                    filename = f"product_{image.product_id}_image_{image.id}.{extension}"
+                    
+                save_path = os.path.join(self.images_folder, filename)
+                
+                # 画像を保存
+                img.save(save_path)
+                logger.info(f"Saved image to: {save_path}")
+                
+                # データベースを更新
+                image.local_path = os.path.join(current_app.config.get('IMAGES_FOLDER'), filename)
+                image.downloaded = True
+                db.session.commit()
+                
+                # 保存されたことを確認
+                if os.path.exists(save_path):
+                    logger.info(f"Confirmed image file exists at: {save_path}")
+                    return True
+                else:
+                    logger.error(f"Failed to save image file at: {save_path}")
+                    return False
+                
         except requests.RequestException as e:
             logger.error(f"Failed to download image {image_id}: {e}")
             return False

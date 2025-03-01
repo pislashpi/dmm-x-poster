@@ -6,6 +6,7 @@ import random
 from datetime import datetime, timedelta
 from flask import current_app
 
+from dmm_x_poster.config import JST
 from dmm_x_poster.db.models import db, Product, Post, Image, PostImage
 from dmm_x_poster.services.twitter_api import twitter_api_service
 
@@ -100,7 +101,7 @@ class SchedulerService:
     
     def calculate_next_post_time(self):
         """次の投稿時間を計算"""
-        now = datetime.utcnow()
+        now = datetime.now(JST)
         
         # 投稿間隔を計算（営業時間内に均等に配置）
         hours_per_day = self.post_end_hour - self.post_start_hour
@@ -151,6 +152,70 @@ class SchedulerService:
         next_time = next_time.replace(microsecond=random.randint(0, 999999))
         
         return next_time
+    
+    def create_immediate_post(self, product_id):
+        """即時投稿を作成して実行"""
+        product = Product.query.get(product_id)
+        if not product:
+            logger.error(f"Product not found: {product_id}")
+            return None
+        
+        # 選択された画像を取得
+        selected_images = product.get_selected_images()
+        if not selected_images:
+            logger.warning(f"No selected images for product: {product_id}")
+            return None
+        
+        # まず画像をダウンロードする（重要）
+        from dmm_x_poster.services.image_downloader import image_downloader_service
+        download_count = image_downloader_service.download_selected_images(product_id)
+        logger.info(f"Downloaded {download_count} images for immediate post")
+        
+        # 投稿テキストを生成
+        post_text = self.generate_post_text(product)
+        
+        # 現在時刻を投稿時間として設定
+        now = datetime.now(JST)
+        
+        # 投稿レコードを作成
+        post = Post(
+            product_id=product_id,
+            post_text=post_text,
+            status='scheduled',  # 一時的にscheduledに設定
+            scheduled_at=now
+        )
+        
+        db.session.add(post)
+        db.session.flush()
+        
+        # 投稿画像の関連付け
+        for i, image in enumerate(selected_images):
+            post_image = PostImage(
+                post_id=post.id,
+                image_id=image.id,
+                display_order=i + 1
+            )
+            db.session.add(post_image)
+        
+        db.session.commit()
+        
+        # 即時投稿処理を実行
+        success = twitter_api_service.post_with_media(post.id)
+        
+        if success:
+            logger.info(f"Immediate post successful for product {product_id}")
+            # 投稿に成功した場合、商品の投稿状態も更新
+            product.posted = True
+            product.last_posted_at = now
+            db.session.commit()
+            return post
+        else:
+            logger.error(f"Immediate post failed for product {product_id}")
+            # エラー状態を更新
+            post.status = 'failed'
+            post.error_message = 'Twitter APIへの投稿に失敗しました'
+            db.session.commit()
+            return None
     
     def schedule_unposted_products(self, limit=5):
         """未投稿の商品を投稿スケジュールに追加"""

@@ -62,7 +62,7 @@ def create_app(config_class: Optional[Any] = None) -> Flask:
         logger.info(f"Created images directory: {images_dir}")
     
     # バックグラウンドタスクのセットアップ
-    scheduler = BackgroundScheduler()
+    scheduler = BackgroundScheduler(timezone='Asia/Tokyo')
     
     # 毎時実行: スケジュールされた投稿を処理
     scheduler.add_job(
@@ -145,6 +145,10 @@ def register_routes(app: Flask) -> None:
         if keyword:
             query = query.filter(Product.title.like(f'%{keyword}%'))
         
+        # ジャンル検索パラメータ（フェッチ時のみ使用）
+        article = request.args.get('article', '')
+        article_id = request.args.get('article_id', '')
+        
         # 並び替え
         sort = request.args.get('sort', 'latest')
         if sort == 'latest':
@@ -161,7 +165,9 @@ def register_routes(app: Flask) -> None:
             'products.html',
             products=products,
             keyword=keyword,
-            sort=sort
+            sort=sort,
+            article=article,
+            article_id=article_id
         )
     
     @app.route('/products/<int:product_id>')
@@ -218,17 +224,21 @@ def register_routes(app: Flask) -> None:
     @app.route('/products/<int:product_id>/create_post', methods=['POST'])
     def create_post(product_id):
         """投稿を作成"""
-        post = scheduler_service.create_post(product_id)
+        post_type = request.form.get('post_type', 'scheduled')
+        scheduled_at = request.form.get('scheduled_at')
         
-        if post:
-            product = db.session.get(Product, product_id)
-            product.posted = True
-            db.session.commit()
-            flash('投稿がスケジュールされました', 'success')
-        else:
+        # 選択された画像があるか確認
+        product = db.session.get(Product, product_id)
+        if not product or not product.get_selected_images():
             flash('投稿の作成に失敗しました。画像が選択されているか確認してください。', 'danger')
+            return redirect(url_for('product_detail', product_id=product_id))
         
-        return redirect(url_for('product_detail', product_id=product_id))
+        if post_type == 'now':
+            # 即時投稿
+            post = scheduler_service.create_immediate_post(product_id)
+        else:
+            # 予約投稿
+            post = scheduler_service.create_post(product_id, scheduled_date=scheduled_at)
 
     @app.route('/posts')
     def posts():
@@ -294,11 +304,15 @@ def register_routes(app: Flask) -> None:
     def fetch_new():
         """新しい商品を取得（手動）"""
         hits = request.form.get('hits', 20, type=int)
-        floor = request.form.get('floor', 'dvd')
+        floor = request.form.get('floor', 'videoa')
+        article = request.form.get('article', None)
+        article_id = request.form.get('article_id', None)
         
         count = dmm_api_service.fetch_and_save_new_items(
             floor=floor,
-            hits=hits
+            hits=hits,
+            article=article,
+            article_id=article_id
         )
         
         flash(f'{count}件の新しい商品を取得しました', 'success')
