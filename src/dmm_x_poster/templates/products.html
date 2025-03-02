@@ -21,25 +21,32 @@
     <div class="card mb-4">
         <div class="card-body">
             <form action="{{ url_for('products') }}" method="get" class="row g-3">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-search"></i></span>
                         <input type="text" name="keyword" class="form-control" placeholder="タイトルで検索..." value="{{ keyword }}">
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <select name="sort" class="form-select">
                         <option value="latest" {% if sort == 'latest' %}selected{% endif %}>新着順</option>
                         <option value="title" {% if sort == 'title' %}selected{% endif %}>タイトル順</option>
                         <option value="release" {% if sort == 'release' %}selected{% endif %}>発売日順</option>
                     </select>
                 </div>
+                <div class="col-md-2">
+                    <select name="release_status" class="form-select">
+                        <option value="all" {% if release_status == 'all' %}selected{% endif %}>全商品</option>
+                        <option value="released" {% if release_status == 'released' %}selected{% endif %}>発売済み</option>
+                        <option value="preorder" {% if release_status == 'preorder' %}selected{% endif %}>予約商品</option>
+                    </select>
+                </div>
                 <div class="col-md-3">
-                    <input type="text" name="article_id" class="form-control" placeholder="ジャンルID" value="{{ article_id }}">
-                    <input type="hidden" name="article" value="genre">
+                    <input type="text" name="genres" class="form-control" placeholder="ジャンル(カンマ区切り)" value="{{ genres_str }}">
+                    <small class="form-text text-muted">例: 単体作品,巨乳</small>
                 </div>
                 <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">適用</button>
+                    <button type="submit" class="btn btn-primary w-100">検索</button>
                 </div>
             </form>
         </div>

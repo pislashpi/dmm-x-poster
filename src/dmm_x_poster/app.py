@@ -8,7 +8,9 @@ from typing import Optional, Any, Dict, Union
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
 from flask_migrate import Migrate
 from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime
 
+from dmm_x_poster.config import JST
 from dmm_x_poster.config import Config
 from dmm_x_poster.db.models import db, Product, Image, Post, PostImage
 from dmm_x_poster.services.dmm_api import dmm_api_service
@@ -145,9 +147,23 @@ def register_routes(app: Flask) -> None:
         if keyword:
             query = query.filter(Product.title.like(f'%{keyword}%'))
         
-        # ジャンル検索パラメータ（フェッチ時のみ使用）
-        article = request.args.get('article', '')
-        article_id = request.args.get('article_id', '')
+        # 発売状況によるフィルター
+        release_status = request.args.get('release_status', 'all')
+        today = datetime.now(JST).date()
+        if release_status == 'released':
+            # 発売済み商品（発売日が今日以前）
+            query = query.filter(Product.release_date <= today)
+        elif release_status == 'preorder':
+            # 予約商品（発売日が今日より後）
+            query = query.filter(Product.release_date > today)
+        
+        # ジャンルによるフィルター
+        genres_str = request.args.get('genres', '')
+        if genres_str:
+            genres_list = [genre.strip() for genre in genres_str.split(',') if genre.strip()]
+            # 複数ジャンルでAND検索
+            for genre in genres_list:
+                query = query.filter(Product.genres.like(f'%{genre}%'))
         
         # 並び替え
         sort = request.args.get('sort', 'latest')
@@ -166,8 +182,8 @@ def register_routes(app: Flask) -> None:
             products=products,
             keyword=keyword,
             sort=sort,
-            article=article,
-            article_id=article_id
+            release_status=release_status,
+            genres_str=genres_str
         )
     
     @app.route('/products/<int:product_id>')
@@ -321,15 +337,44 @@ def register_routes(app: Flask) -> None:
         """新しい商品を取得（手動）"""
         hits = request.form.get('hits', 20, type=int)
         floor = request.form.get('floor', 'videoa')
-        article = request.form.get('article', None)
-        article_id = request.form.get('article_id', None)
+        release_status = request.form.get('release_status', 'released')  # デフォルトを発売済みに
         
-        count = dmm_api_service.fetch_and_save_new_items(
-            floor=floor,
-            hits=hits,
-            article=article,
-            article_id=article_id
-        )
+        # ジャンルIDリスト取得
+        genre_ids_str = request.form.get('genre_ids', '')
+        genre_ids = [id.strip() for id in genre_ids_str.split(',') if id.strip()]
+        
+        # 女優IDリスト取得
+        actress_ids_str = request.form.get('actress_ids', '')
+        actress_ids = [id.strip() for id in actress_ids_str.split(',') if id.strip()]
+        
+        # APIパラメータの準備
+        kwargs = {
+            'floor': floor,
+            'hits': hits,
+            'service': 'digital'
+        }
+        
+        # 発売ステータスに応じた日付フィルター追加
+        # DMM APIの日付形式: YYYY-MM-DDT00:00:00
+        today = datetime.now(JST).strftime('%Y-%m-%dT00:00:00')
+        if release_status == 'released':
+            # 発売済み作品（今日以前の発売日）
+            kwargs['lte_date'] = today
+        elif release_status == 'preorder':
+            # 予約商品（今日より後の発売日）
+            kwargs['gte_date'] = today
+        # allの場合はフィルターなし
+        
+        # ジャンルIDの処理
+        if genre_ids:
+            kwargs['article_genre'] = genre_ids
+        
+        # 女優IDの処理
+        if actress_ids:
+            kwargs['article_actress'] = actress_ids
+        
+        logger.info(f"Fetching items with parameters: {kwargs}")
+        count = dmm_api_service.fetch_and_save_new_items(**kwargs)
         
         flash(f'{count}件の新しい商品を取得しました', 'success')
         return redirect(url_for('index'))

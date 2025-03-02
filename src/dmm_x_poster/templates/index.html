@@ -56,14 +56,57 @@
                             <i class="fas fa-paper-plane me-2"></i>投稿を管理する
                         </a>
                         <form action="{{ url_for('fetch_new') }}" method="post">
-                            <div class="input-group">
-                                <input type="number" name="hits" class="form-control" value="20" min="1" max="100">
-                                <input type="hidden" name="floor" value="videoa">
-                                <input type="hidden" name="article" value="genre">
-                                <input type="text" name="article_id" class="form-control" placeholder="ジャンルID（任意）">
-                                <button class="btn btn-outline-dark" type="submit">
-                                    <i class="fas fa-sync-alt me-1"></i>新着取得
-                                </button>
+                            <div class="card mb-3">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">新着取得設定</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-3">
+                                        <div class="col-md-4">
+                                            <label class="form-label">取得件数</label>
+                                            <input type="number" name="hits" class="form-control" value="20" min="1" max="100">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">フロア</label>
+                                            <select name="floor" class="form-select">
+                                                <option value="videoa" selected>ビデオ/一般</option>
+                                                <option value="videoc">ビデオ/素人</option>
+                                                <option value="anime">アニメ</option>
+                                                <option value="digital">同人</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">発売ステータス</label>
+                                            <select name="release_status" class="form-select">
+                                                <option value="released" selected>発売済み作品のみ</option>
+                                                <option value="preorder">予約商品のみ</option>
+                                                <option value="all">すべて</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-12">
+                                            <label class="form-label">ジャンルID（カンマ区切りで複数指定可能）</label>
+                                            <input type="text" name="genre_ids" class="form-control" placeholder="例: 4025,5001">
+                                            <small class="form-text text-muted">空欄の場合は絞り込みません</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-12">
+                                            <label class="form-label">女優ID（カンマ区切りで複数指定可能）</label>
+                                            <input type="text" name="actress_ids" class="form-control" placeholder="例: 12345,67890">
+                                            <small class="form-text text-muted">空欄の場合は絞り込みません</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="d-grid">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-sync-alt me-1"></i>新着商品を取得
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </form>
                     </div>

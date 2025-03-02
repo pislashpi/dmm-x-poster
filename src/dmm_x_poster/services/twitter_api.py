@@ -104,75 +104,100 @@ class TwitterAPIService:
             
             logger.info(f"Found {len(movie_images)} movie images and {len(standard_images)} standard images")
             
-            # 動画がある場合は特別処理
-            if movie_images:
-                # 動画投稿の際のロジック（今回はURL添付のみ）
-                logger.info("Detected video content, adding URL to tweet")
-                movie_urls = [img.image_url for img in movie_images if img.image_url]
-                tweet_text = post.post_text
-                
-                if movie_urls:
-                    tweet_text = f"{tweet_text}\n\n動画: {movie_urls[0]}"
-                
-                response = self.client.create_tweet(text=tweet_text)
-                tweet_id = response.data['id']
-                
-                # 投稿成功を記録
-                post.status = 'posted'
-                post.posted_at = datetime.now(JST)
-                db.session.commit()
-                logger.info(f"Posted tweet with video URL: {tweet_id}")
-                return True
-                
-            # 通常の画像投稿処理
-            for image in standard_images:
-                # ローカルファイルパスの確認
-                if not image.local_path:
-                    logger.warning(f"Image {image.id} has no local_path")
-                    continue
-                    
-                # 絶対パスを構築
-                app_root = current_app.root_path
-                absolute_path = os.path.join(app_root, image.local_path)
-                    
-                # ファイルの存在確認
-                if not os.path.exists(absolute_path):
-                    logger.warning(f"Image file not found: {absolute_path}")
-                    logger.warning(f"Also tried relative path: {image.local_path}")
-                    continue
-                
-                try:
-                    # 画像をアップロード（絶対パスを使用）
-                    logger.info(f"Uploading image from {absolute_path}")
-                    media = self.api.media_upload(absolute_path)
-                    media_ids.append(media.media_id)
-                    logger.info(f"Successfully uploaded media ID: {media.media_id}")
-                except Exception as e:
-                    logger.error(f"Error uploading media: {e}")
-                    continue
+            # mp4動画ファイルを検出
+            mp4_videos = [img for img in movie_images if img.image_url and img.image_url.endswith('.mp4')]
             
-            # 投稿を作成
-            if media_ids:
-                logger.info(f"Creating tweet with {len(media_ids)} media attachments")
-                response = self.client.create_tweet(
-                    text=post.post_text,
-                    media_ids=media_ids
-                )
-                tweet_id = response.data['id']
+            # 動画処理のフラグ
+            has_video_content = False
+            
+            # mp4動画があり、ローカルにダウンロードされている場合
+            if mp4_videos:
+                has_video_content = True
+                logger.info(f"Found mp4 video: {mp4_videos[0].image_url}")
                 
-                # 投稿成功を記録
-                post.status = 'posted'
-                post.posted_at = datetime.now(JST)
-                db.session.commit()
-                logger.info(f"Posted tweet with media: {tweet_id}")
-                return True
-            else:
-                # 画像処理に失敗した場合
-                logger.error("Failed to upload any media")
-                post.status = 'failed'
-                post.error_message = "Failed to upload media files. Check if images exist and are accessible."
-                db.session.commit()
-                return False
+                # 動画URLが存在する場合は、テキストに追加
+                video_urls = [video.image_url for video in mp4_videos if video.image_url]
+                if video_urls:
+                    # 投稿テキストに動画があることを追記
+                    tweet_text = f"{post.post_text}\n\n動画: {post.product.url}"
+                    logger.info(f"Creating tweet with video reference: {tweet_text}")
+                    
+                    # テキスト投稿
+                    response = self.client.create_tweet(text=tweet_text)
+                    tweet_id = response.data['id']
+                    
+                    # 投稿成功を記録
+                    post.status = 'posted'
+                    post.posted_at = datetime.now(JST)
+                    db.session.commit()
+                    logger.info(f"Posted tweet with video reference: {tweet_id}")
+                    return True
+            
+            # 動画コンテンツがない、または処理に失敗した場合は通常の画像投稿
+            if not has_video_content:
+                # 通常の画像投稿処理
+                for image in standard_images:
+                    # ローカルファイルパスの確認
+                    if not image.local_path:
+                        logger.warning(f"Image {image.id} has no local_path")
+                        continue
+                        
+                    # 絶対パスを構築
+                    app_root = current_app.root_path
+                    absolute_path = os.path.join(app_root, image.local_path)
+                        
+                    # ファイルの存在確認
+                    if not os.path.exists(absolute_path):
+                        logger.warning(f"Image file not found: {absolute_path}")
+                        logger.warning(f"Also tried relative path: {image.local_path}")
+                        continue
+                    
+                    try:
+                        # 画像をアップロード（絶対パスを使用）
+                        logger.info(f"Uploading image from {absolute_path}")
+                        media = self.api.media_upload(absolute_path)
+                        media_ids.append(media.media_id)
+                        logger.info(f"Successfully uploaded media ID: {media.media_id}")
+                    except Exception as e:
+                        logger.error(f"Error uploading media: {e}")
+                        continue
+                
+                # 投稿を作成
+                if media_ids:
+                    logger.info(f"Creating tweet with {len(media_ids)} media attachments")
+                    response = self.client.create_tweet(
+                        text=post.post_text,
+                        media_ids=media_ids
+                    )
+                    tweet_id = response.data['id']
+                    
+                    # 投稿成功を記録
+                    post.status = 'posted'
+                    post.posted_at = datetime.now(JST)
+                    db.session.commit()
+                    logger.info(f"Posted tweet with media: {tweet_id}")
+                    return True
+                else:
+                    # 画像処理に失敗した場合、テキストのみで投稿を試みる
+                    logger.warning("Failed to upload any media, falling back to text-only tweet")
+                    
+                    try:
+                        # テキストのみの投稿を試みる
+                        response = self.client.create_tweet(text=post.post_text)
+                        tweet_id = response.data['id']
+                        
+                        # 投稿成功を記録
+                        post.status = 'posted'
+                        post.posted_at = datetime.now(JST)
+                        db.session.commit()
+                        logger.info(f"Posted text-only tweet (fallback): {tweet_id}")
+                        return True
+                    except Exception as e:
+                        logger.error(f"Error posting fallback text-only tweet: {e}")
+                        post.status = 'failed'
+                        post.error_message = f"Failed to post: {str(e)}"
+                        db.session.commit()
+                        return False
             
         except Exception as e:
             # エラー発生時

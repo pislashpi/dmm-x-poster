@@ -42,6 +42,8 @@
                 </ul>
                 <form class="d-flex" action="{{ url_for('fetch_new') }}" method="post">
                     <input type="hidden" name="hits" value="20">
+                    <input type="hidden" name="floor" value="videoa">
+                    <input type="hidden" name="release_status" value="released"> <!-- 発売済み作品のみ取得 -->
                     <button class="btn btn-outline-light" type="submit">
                         <i class="fas fa-sync-alt me-1"></i>新着取得
                     </button>

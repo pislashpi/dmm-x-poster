@@ -47,68 +47,97 @@ class ImageDownloaderService:
                 logger.warning(f"Image marked as downloaded but file not found: {absolute_path}")
         
         try:
-            # 画像タイプに応じた処理
+            # 画像タイプを取得
             image_type = getattr(image, 'image_type', 'sample')
+            
+            # 画像URLが実際にmp4ファイルかチェック
+            is_mp4 = image.image_url and image.image_url.endswith('.mp4')
             
             # 動画の場合は特別処理
             if image_type == 'movie':
-                # 動画の場合はURLを保存するだけ（実際のダウンロードはしない）
-                # 保存先パスを生成（実際にはファイルは保存しない）
-                filename = f"product_{image.product_id}_movie_{image.id}.mp4"
-                save_path = os.path.join(self.images_folder, filename)
-                
-                # データベースを更新（相対パスで保存）
-                image.local_path = os.path.join(current_app.config.get('IMAGES_FOLDER'), filename)
-                image.downloaded = True  # ダウンロード済みとマーク
-                db.session.commit()
-                
-                logger.info(f"Stored movie URL for image: {image_id}")
-                return True
-            else:
-                # 画像URLから取得
-                logger.info(f"Downloading image {image_id} from URL: {image.image_url}")
-                response = requests.get(image.image_url, timeout=10)
-                response.raise_for_status()
-                
-                # 画像形式を検証
-                img = PILImage.open(BytesIO(response.content))
-                
-                # 拡張子を取得
-                extension = img.format.lower() if img.format else 'jpg'
-                
-                # 保存先パスを生成（ファイル名を決定）
-                if image_type == 'package':
-                    filename = f"product_{image.product_id}_package_{image.id}.{extension}"
-                else:
-                    filename = f"product_{image.product_id}_image_{image.id}.{extension}"
+                # mp4ファイルURLの場合
+                if is_mp4:
+                    # 実際に動画をダウンロード
+                    logger.info(f"Downloading movie {image_id} from URL: {image.image_url}")
+                    response = requests.get(image.image_url, timeout=60)  # 動画は大きいので長めのタイムアウト
+                    response.raise_for_status()
                     
-                # 保存先のフルパス（ディレクトリから）
-                save_path = os.path.join(self.images_folder, filename)
-                
-                # 画像を保存
-                img.save(save_path)
-                logger.info(f"Saved image to: {save_path}")
-                
-                # データベースを更新（相対パスで保存）
-                rel_path = os.path.join(current_app.config.get('IMAGES_FOLDER'), filename)
-                image.local_path = rel_path
-                image.downloaded = True
-                db.session.commit()
-                
-                # 保存されたことを確認
-                abs_path = os.path.join(current_app.root_path, rel_path)
-                if os.path.exists(abs_path):
-                    logger.info(f"Confirmed image file exists at: {abs_path}")
+                    # ファイル名を決定
+                    filename = f"product_{image.product_id}_movie_{image.id}.mp4"
+                    save_path = os.path.join(self.images_folder, filename)
+                    
+                    # 動画を保存
+                    with open(save_path, 'wb') as f:
+                        f.write(response.content)
+                    
+                    logger.info(f"Saved movie to: {save_path}")
+                    
+                    # データベースを更新
+                    rel_path = os.path.join(current_app.config.get('IMAGES_FOLDER'), filename)
+                    image.local_path = rel_path
+                    image.downloaded = True
+                    db.session.commit()
+                    
                     return True
                 else:
-                    logger.error(f"Failed to save image file at: {abs_path}")
+                    # mp4ファイルではない場合は参照情報として保存
+                    filename = f"movie_ref_{image.product_id}_{image.id}.txt"
+                    save_path = os.path.join(self.images_folder, filename)
+                    
+                    with open(save_path, 'w', encoding='utf-8') as f:
+                        f.write(image.image_url)
+                    
+                    rel_path = os.path.join(current_app.config.get('IMAGES_FOLDER'), filename)
+                    image.local_path = rel_path
+                    image.downloaded = True
+                    db.session.commit()
+                    
+                    logger.info(f"Stored movie reference for image: {image_id}")
+                    return True
+            else:
+                # 画像処理
+                try:
+                    img = PILImage.open(BytesIO(response.content))
+                    
+                    # 拡張子を取得
+                    extension = img.format.lower() if img.format else 'jpg'
+                    
+                    # ファイル名を決定
+                    if image_type == 'package':
+                        filename = f"product_{image.product_id}_package_{image.id}.{extension}"
+                    else:
+                        filename = f"product_{image.product_id}_image_{image.id}.{extension}"
+                        
+                    # 保存先のフルパス
+                    save_path = os.path.join(self.images_folder, filename)
+                    
+                    # 画像を保存
+                    img.save(save_path)
+                    logger.info(f"Saved image to: {save_path}")
+                    
+                    # データベースを更新
+                    rel_path = os.path.join(current_app.config.get('IMAGES_FOLDER'), filename)
+                    image.local_path = rel_path
+                    image.downloaded = True
+                    db.session.commit()
+                    
+                    # 保存確認
+                    abs_path = os.path.join(current_app.root_path, rel_path)
+                    if os.path.exists(abs_path):
+                        logger.info(f"Confirmed image file exists at: {abs_path}")
+                        return True
+                    else:
+                        logger.error(f"Failed to save image file at: {abs_path}")
+                        return False
+                except Exception as e:
+                    logger.error(f"Error processing image: {e}")
                     return False
                 
         except requests.RequestException as e:
-            logger.error(f"Failed to download image {image_id}: {e}")
+            logger.error(f"Failed to download {image_type} {image_id}: {e}")
             return False
         except Exception as e:
-            logger.error(f"Error processing image {image_id}: {e}")
+            logger.error(f"Error processing {image_type} {image_id}: {e}")
             return False
     
     def download_selected_images(self, product_id):
