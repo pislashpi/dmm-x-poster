@@ -166,10 +166,14 @@ class SchedulerService:
             logger.warning(f"No selected images for product: {product_id}")
             return None
         
-        # まず画像をダウンロードする（重要）
+        # 先に画像をダウンロードする
         from dmm_x_poster.services.image_downloader import image_downloader_service
-        download_count = image_downloader_service.download_selected_images(product_id)
-        logger.info(f"Downloaded {download_count} images for immediate post")
+        logger.info(f"Downloading images for immediate post of product {product_id}")
+        
+        for image in selected_images:
+            success = image_downloader_service.download_image(image.id)
+            if not success:
+                logger.warning(f"Failed to download image {image.id}")
         
         # 投稿テキストを生成
         post_text = self.generate_post_text(product)
@@ -204,7 +208,7 @@ class SchedulerService:
         
         if success:
             logger.info(f"Immediate post successful for product {product_id}")
-            # 投稿に成功した場合、商品の投稿状態も更新
+            # 商品の投稿状態を更新
             product.posted = True
             product.last_posted_at = now
             db.session.commit()

@@ -137,9 +137,9 @@ class DMMAPIService:
                 
                 # サムネイル画像を保存
                 if 'sampleImageURL' in item:
-                    # sample_s.image の取得
-                    if 'sample_s' in item['sampleImageURL'] and 'image' in item['sampleImageURL']['sample_s']:
-                        sample_images = item['sampleImageURL']['sample_s']['image']
+                    # sample_l.image の取得
+                    if 'sample_l' in item['sampleImageURL'] and 'image' in item['sampleImageURL']['sample_l']:
+                        sample_images = item['sampleImageURL']['sample_l']['image']
                         for i, img_url in enumerate(sample_images):
                             image = Image(
                                 product_id=product.id,

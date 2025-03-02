@@ -239,6 +239,22 @@ def register_routes(app: Flask) -> None:
         else:
             # 予約投稿
             post = scheduler_service.create_post(product_id, scheduled_date=scheduled_at)
+        
+        if post:
+            # 成功時
+            product = db.session.get(Product, product_id)
+            product.posted = True
+            db.session.commit()
+            
+            if post_type == 'now':
+                flash('投稿が完了しました', 'success')
+            else:
+                flash('投稿がスケジュールされました', 'success')
+        else:
+            # 失敗時
+            flash('投稿の作成に失敗しました。システムログを確認してください。', 'danger')
+        
+        return redirect(url_for('product_detail', product_id=product_id))
 
     @app.route('/posts')
     def posts():

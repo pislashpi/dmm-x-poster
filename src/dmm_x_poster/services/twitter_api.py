@@ -6,6 +6,8 @@ import tweepy
 import logging
 from flask import current_app
 from datetime import datetime, timezone, UTC
+from zoneinfo import ZoneInfo
+
 
 from dmm_x_poster.config import JST
 from dmm_x_poster.db.models import db, Post, Image, PostImage
@@ -15,6 +17,13 @@ import warnings
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="tweepy")
 
 logger = logging.getLogger(__name__)
+
+JST = ZoneInfo("Asia/Tokyo")
+
+def jst_to_utc(jst_datetime):
+    if jst_datetime.tzinfo is None:
+        jst_datetime = jst_datetime.replace(tzinfo=JST)
+    return jst_datetime.astimezone(timezone.utc)
 
 class TwitterAPIService:
     """Twitter APIと連携するサービスクラス"""
@@ -57,13 +66,6 @@ class TwitterAPIService:
         """API認証状態をチェック"""
         return self.api is not None and self.client is not None
     
-    def jst_to_utc(jst_datetime):
-        """JSTからUTCに変換"""
-        if jst_datetime.tzinfo is None:
-            # タイムゾーン情報がない場合はJSTと仮定
-            jst_datetime = jst_datetime.replace(tzinfo=JST)
-        return jst_datetime.astimezone(timezone.utc)
-    
     def post_with_media(self, post_id):
         """画像付きツイートを投稿"""
         if not self.is_authenticated():
@@ -96,13 +98,13 @@ class TwitterAPIService:
                 logger.info(f"Posted text-only tweet: {tweet_id}")
                 return True
             
-            # 画像と動画を処理
+            # 画像と動画を区別して処理
             movie_images = [img for img in images if hasattr(img, 'image_type') and img.image_type == 'movie']
             standard_images = [img for img in images if not hasattr(img, 'image_type') or img.image_type != 'movie']
             
             logger.info(f"Found {len(movie_images)} movie images and {len(standard_images)} standard images")
             
-            # まずは動画かどうかチェック
+            # 動画がある場合は特別処理
             if movie_images:
                 # 動画投稿の際のロジック（今回はURL添付のみ）
                 logger.info("Detected video content, adding URL to tweet")
@@ -117,7 +119,7 @@ class TwitterAPIService:
                 
                 # 投稿成功を記録
                 post.status = 'posted'
-                post.posted_at = datetime.now(UTC)
+                post.posted_at = datetime.now(JST)
                 db.session.commit()
                 logger.info(f"Posted tweet with video URL: {tweet_id}")
                 return True
@@ -129,16 +131,20 @@ class TwitterAPIService:
                     logger.warning(f"Image {image.id} has no local_path")
                     continue
                     
+                # 絶対パスを構築
+                app_root = current_app.root_path
+                absolute_path = os.path.join(app_root, image.local_path)
+                    
                 # ファイルの存在確認
-                if not os.path.exists(image.local_path):
-                    logger.warning(f"Image file not found: {image.local_path}")
+                if not os.path.exists(absolute_path):
+                    logger.warning(f"Image file not found: {absolute_path}")
+                    logger.warning(f"Also tried relative path: {image.local_path}")
                     continue
                 
                 try:
-                    # 画像をアップロード
-                    local_path = os.path.join(current_app.root_path, image.local_path)
-                    logger.info(f"Uploading image from {local_path}")
-                    media = self.api.media_upload(local_path)
+                    # 画像をアップロード（絶対パスを使用）
+                    logger.info(f"Uploading image from {absolute_path}")
+                    media = self.api.media_upload(absolute_path)
                     media_ids.append(media.media_id)
                     logger.info(f"Successfully uploaded media ID: {media.media_id}")
                 except Exception as e:
@@ -156,7 +162,7 @@ class TwitterAPIService:
                 
                 # 投稿成功を記録
                 post.status = 'posted'
-                post.posted_at = datetime.now(UTC)
+                post.posted_at = datetime.now(JST)
                 db.session.commit()
                 logger.info(f"Posted tweet with media: {tweet_id}")
                 return True

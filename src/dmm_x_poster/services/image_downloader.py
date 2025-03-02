@@ -36,9 +36,15 @@ class ImageDownloaderService:
             logger.error(f"Image not found: {image_id}")
             return False
         
-        if image.downloaded and image.local_path and os.path.exists(os.path.join(current_app.root_path, image.local_path)):
-            logger.info(f"Image already downloaded: {image_id}")
-            return True
+        # 画像がすでにダウンロード済みか確認
+        if image.downloaded and image.local_path:
+            app_root = current_app.root_path
+            absolute_path = os.path.join(app_root, image.local_path)
+            if os.path.exists(absolute_path):
+                logger.info(f"Image already downloaded: {image_id} at {absolute_path}")
+                return True
+            else:
+                logger.warning(f"Image marked as downloaded but file not found: {absolute_path}")
         
         try:
             # 画像タイプに応じた処理
@@ -51,7 +57,7 @@ class ImageDownloaderService:
                 filename = f"product_{image.product_id}_movie_{image.id}.mp4"
                 save_path = os.path.join(self.images_folder, filename)
                 
-                # データベースを更新
+                # データベースを更新（相対パスで保存）
                 image.local_path = os.path.join(current_app.config.get('IMAGES_FOLDER'), filename)
                 image.downloaded = True  # ダウンロード済みとマーク
                 db.session.commit()
@@ -67,30 +73,35 @@ class ImageDownloaderService:
                 # 画像形式を検証
                 img = PILImage.open(BytesIO(response.content))
                 
-                # 保存先パスを生成
+                # 拡張子を取得
                 extension = img.format.lower() if img.format else 'jpg'
+                
+                # 保存先パスを生成（ファイル名を決定）
                 if image_type == 'package':
                     filename = f"product_{image.product_id}_package_{image.id}.{extension}"
                 else:
                     filename = f"product_{image.product_id}_image_{image.id}.{extension}"
                     
+                # 保存先のフルパス（ディレクトリから）
                 save_path = os.path.join(self.images_folder, filename)
                 
                 # 画像を保存
                 img.save(save_path)
                 logger.info(f"Saved image to: {save_path}")
                 
-                # データベースを更新
-                image.local_path = os.path.join(current_app.config.get('IMAGES_FOLDER'), filename)
+                # データベースを更新（相対パスで保存）
+                rel_path = os.path.join(current_app.config.get('IMAGES_FOLDER'), filename)
+                image.local_path = rel_path
                 image.downloaded = True
                 db.session.commit()
                 
                 # 保存されたことを確認
-                if os.path.exists(save_path):
-                    logger.info(f"Confirmed image file exists at: {save_path}")
+                abs_path = os.path.join(current_app.root_path, rel_path)
+                if os.path.exists(abs_path):
+                    logger.info(f"Confirmed image file exists at: {abs_path}")
                     return True
                 else:
-                    logger.error(f"Failed to save image file at: {save_path}")
+                    logger.error(f"Failed to save image file at: {abs_path}")
                     return False
                 
         except requests.RequestException as e:
