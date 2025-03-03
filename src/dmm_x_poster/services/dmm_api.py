@@ -92,6 +92,21 @@ class DMMAPIService:
             item_count = len(data['result']['items'])
             logger.info(f"API returned {item_count} items")
             
+            # 動画情報の検証 (大文字小文字の修正)
+            for idx, item in enumerate(data['result']['items']):
+                has_movie = 'sampleMovieURL' in item  # 大文字小文字修正
+                logger.debug(f"商品 #{idx+1} ({item.get('content_id', 'unknown')}): " +
+                            f"動画情報あり={has_movie}")
+                
+                if has_movie:
+                    available_sizes = []
+                    movie_sizes = ['size_720_480', 'size_644_414', 'size_560_360', 'size_476_306']
+                    for size in movie_sizes:
+                        if size in item['sampleMovieURL'] and item['sampleMovieURL'][size]:  # 大文字小文字修正
+                            available_sizes.append(size)
+                    
+                    logger.debug(f"  利用可能な動画サイズ: {', '.join(available_sizes) if available_sizes else 'なし'}")
+            
             return data['result']['items']
         except requests.RequestException as e:
             logger.error(f"API request failed: {e}")
@@ -104,6 +119,16 @@ class DMMAPIService:
             logger.error(f"Unexpected error during API request: {e}")
             return []
     
+    def get_request_params(self):
+        """リクエスト共通パラメータ（クッキーとヘッダー）を返す"""
+        return {
+            'cookies': {"age_check_done": "1"},
+            'headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            'timeout': 15
+        }
+
     def save_items_to_db(self, items):
         """取得した商品情報をデータベースに保存"""
         saved_count = 0
@@ -139,7 +164,7 @@ class DMMAPIService:
                     dmm_product_id=item['content_id'],
                     title=item['title'],
                     actresses=json.dumps(actresses, ensure_ascii=False),
-                    url=item['URL'],
+                    url=item.get('affiliateURL', item['URL']),  # affiliateURLを優先、なければURLを使用
                     package_image_url=item.get('imageURL', {}).get('large'),
                     maker=item.get('iteminfo', {}).get('maker', [{}])[0].get('name', ''),
                     genres=json.dumps(genres, ensure_ascii=False),
@@ -175,42 +200,23 @@ class DMMAPIService:
                             db.session.add(image)
                 
                 # サンプルムービーを保存
-                if 'samplemovieURL' in item:
-                    # 利用可能なサイズを優先順位で試す
-                    movie_sizes = ['size_720_480', 'size_644_414', 'size_560_360', 'size_476_306']
+                if 'URL' in item:  # affiliateURLを使用
+                    affiliate_url = item['URL']
+                    logger.info(f"Extracting video URL from product page: {affiliate_url}")
                     
-                    for size in movie_sizes:
-                        if size in item['samplemovieURL'] and item['samplemovieURL'][size]:
-                            movie_page_url = item['samplemovieURL'][size]
-                            
-                            if movie_page_url:  # URLが存在するか確認
-                                logger.info(f"Found movie page URL: {movie_page_url}")
-                                
-                                # 実際の動画ファイルURLを抽出
-                                real_video_url = self.extract_video_url_from_page(movie_page_url)
-                                
-                                if real_video_url:
-                                    movie = Image(
-                                        product_id=product.id,
-                                        image_url=real_video_url,  # 実際のmp4ファイルURLを保存
-                                        image_type='movie',
-                                        created_at=datetime.now(JST)
-                                    )
-                                    db.session.add(movie)
-                                    logger.info(f"Added real movie URL: {real_video_url}")
-                                else:
-                                    # 実際のURLが取得できなかった場合は、ページURLを保存
-                                    movie = Image(
-                                        product_id=product.id,
-                                        image_url=movie_page_url,
-                                        image_type='movie',
-                                        created_at=datetime.now(JST)
-                                    )
-                                    db.session.add(movie)
-                                    logger.info(f"Added movie page URL as fallback: {movie_page_url}")
-                                
-                                # 最初のサイズが見つかれば十分
-                                break
+                    # 商品ページから動画URLを抽出
+                    video_url = self.extract_video_url_from_page(affiliate_url)
+                    
+                    if video_url:
+                        # 動画URLを保存
+                        movie = Image(
+                            product_id=product.id,
+                            image_url=video_url,
+                            image_type='movie',
+                            created_at=datetime.now(JST)
+                        )
+                        db.session.add(movie)
+                        logger.info(f"Added video URL from product page: {video_url}")
                 
                 saved_count += 1
                 
@@ -228,63 +234,112 @@ class DMMAPIService:
         
         return saved_count
     
+    def _modify_video_url(self, video_url):
+        """動画URLを_dm_w.mp4形式に変換"""
+        if video_url and video_url.endswith('.mp4'):
+            # .mp4の前に_dm_wを挿入
+            modified_url = video_url.replace('.mp4', '_dm_w.mp4')
+            logger.debug(f"Modified video URL from {video_url} to {modified_url}")
+            return modified_url
+        return video_url
+
     def extract_video_url_from_page(self, page_url):
         """商品詳細ページから動画URLを抽出"""
         try:
             import requests
             from bs4 import BeautifulSoup
             import re
+            import json
             
             logger.info(f"Attempting to extract video URL from page: {page_url}")
             
-            # ページのHTMLを取得
-            response = requests.get(page_url, timeout=15)
+            # リクエストパラメータを取得
+            request_params = self.get_request_params()
+            
+            # ページのHTMLを取得（年齢認証クッキー付き）
+            response = requests.get(
+                page_url, 
+                cookies=request_params['cookies'],
+                headers=request_params['headers'],
+                timeout=request_params['timeout']
+            )
             response.raise_for_status()
             
             # デバッグ用に最初の数バイトを記録
             logger.info(f"Response received, length: {len(response.text)} bytes")
-            logger.info(f"First 100 chars: {response.text[:100]}")
             
             # HTMLをパース
             soup = BeautifulSoup(response.text, 'lxml')
             
-            # 全スクリプトタグを調査
-            script_count = 0
+            # 年齢認証ページかどうかチェック
+            if "年齢確認" in response.text and "あなたは18歳以上ですか" in response.text:
+                logger.warning("Age verification page detected instead of product page")
+                return None
+            
+            # JSONLDを探す（最も信頼性の高い方法）
+            jsonld_scripts = soup.find_all('script', type='application/ld+json')
+            logger.debug(f"Found {len(jsonld_scripts)} JSONLD scripts")
+            
+            for script in jsonld_scripts:
+                if not script.string:
+                    continue
+                    
+                try:
+                    data = json.loads(script.string)
+                    # Product構造体かチェック
+                    if isinstance(data, dict) and data.get('@type') == 'Product':
+                        logger.debug("Found Product type in JSONLD")
+                        # subjectOf内のVideoObjectを確認
+                        if 'subjectOf' in data and data['subjectOf'].get('@type') == 'VideoObject':
+                            logger.debug("Found VideoObject in JSONLD")
+                            content_url = data['subjectOf'].get('contentUrl')
+                            if content_url and 'cc3001.dmm.co.jp/litevideo' in content_url:
+                                # 動画URLが見つかったら、_dm_w.mp4形式に変換して返す
+                                modified_url = self._modify_video_url(content_url)
+                                logger.info(f"Found video URL in JSONLD: {modified_url}")
+                                return modified_url
+                except Exception as e:
+                    logger.error(f"Error parsing JSONLD: {e}")
+            
+            # 全スクリプトタグを調査（バックアップ方法）
+            script_count = len(soup.find_all('script'))
+            logger.debug(f"Searching through {script_count} script tags")
+
             for script in soup.find_all('script'):
-                script_count += 1
-                if script.string:
-                    # cc3001.dmm.co.jp/litevideo のパターンを探す
-                    if 'cc3001.dmm.co.jp/litevideo' in script.string:
-                        # デバッグ用に部分的にスクリプト内容を表示
-                        snippet = script.string[:100] + "..." if len(script.string) > 100 else script.string
-                        logger.info(f"Found potential script with video URL reference: {snippet}")
+                if not script.string:
+                    continue
                     
-                    # 正規表現で動画URLを検索
-                    patterns = [
-                        r'(https://cc3001\.dmm\.co\.jp/litevideo/freepv/[^\'"]+\.mp4)',
-                        r'(https?://.*?\.mp4)'
-                    ]
-                    
-                    for pattern in patterns:
-                        match = re.search(pattern, script.string)
-                        if match:
-                            video_url = match.group(1)
-                            logger.info(f"Found video URL: {video_url}")
-                            return video_url
-            
-            logger.warning(f"No video URL found in page, searched {script_count} script tags")
-            
-            # htmlソースをざっと確認
-            if 'cc3001.dmm.co.jp/litevideo' in response.text:
-                logger.info("Found video URL pattern in HTML, but couldn't extract it properly")
+                # cc3001.dmm.co.jp/litevideo のパターンを探す
+                if script.string and 'cc3001.dmm.co.jp/litevideo' in script.string:
+                    logger.debug("Found script with litevideo reference")
                 
-                # より広範な検索を実行
+                # 正規表現で動画URLを検索
+                patterns = [
+                    r'contentUrl[\s:"\']+([^"\']+cc3001\.dmm\.co\.jp/litevideo/[^"\']+\.mp4)["\']',
+                    r'(https://cc3001\.dmm\.co\.jp/litevideo/freepv/[^\'"]+\.mp4)',
+                    r'(https?://cc3001\.dmm\.co\.jp/litevideo/[^\'"]+\.mp4)'
+                ]
+                
+                for pattern in patterns:
+                    match = re.search(pattern, script.string)
+                    if match:
+                        video_url = match.group(1)
+                        # 動画URLを変換して返す
+                        modified_url = self._modify_video_url(video_url)
+                        logger.info(f"Found video URL in script: {modified_url}")
+                        return modified_url
+            
+            # HTMLソース全体で検索（最後の手段）
+            if 'cc3001.dmm.co.jp/litevideo' in response.text:
                 broader_match = re.search(r'(https://cc3001\.dmm\.co\.jp/litevideo/[^\'"]+\.mp4)', response.text)
                 if broader_match:
                     video_url = broader_match.group(1)
-                    logger.info(f"Found video URL with broader search: {video_url}")
-                    return video_url
-                    
+                    # 動画URLを変換して返す
+                    modified_url = self._modify_video_url(video_url)
+                    logger.info(f"Found video URL with broader search: {modified_url}")
+                    return modified_url
+            
+            logger.warning("No video URL found in product page")
             return None
         except Exception as e:
             logger.error(f"Error extracting video URL from {page_url}: {e}")

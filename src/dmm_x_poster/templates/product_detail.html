@@ -151,6 +151,10 @@
                             <strong>ダウンロード済み:</strong> {{ image.downloaded }}
                             <div>
                                 <a href="{{ image.image_url }}" target="_blank" class="btn btn-sm btn-primary">URLを開く</a>
+                                <!-- 以下を追加 -->
+                                <a href="{{ url_for('download_image', image_id=image.id) }}" class="btn btn-sm btn-success">
+                                    ダウンロード実行
+                                </a>
                             </div>
                         </li>
                         {% endif %}
@@ -193,22 +197,23 @@
                                 <div class="card h-100 image-card {% if image.selected %}selected{% endif %}">
                                     {% if image.image_type == 'movie' %}
                                         <div class="position-relative">
-                                            {% if image.image_url and image.image_url.endswith('.mp4') %}
-                                                <!-- mp4ファイルの場合は直接videoタグで表示 -->
+                                            {% if image.image_url %}
+                                                <!-- 動画タイプがmovieの場合は常にvideoタグで表示 -->
                                                 <video class="card-img-top" style="height: 160px; object-fit: cover;" 
-                                                       src="{{ image.image_url }}" controls 
-                                                       {% if product.package_image_url %}poster="{{ product.package_image_url }}"{% endif %}>
+                                                    src="{{ image.image_url }}" controls 
+                                                    {% if product.package_image_url %}poster="{{ product.package_image_url }}"{% endif %}>
+                                                    <source src="{{ image.image_url }}" type="video/mp4">
+                                                    お使いのブラウザは動画再生に対応していません
                                                 </video>
                                             {% else %}
-                                                <!-- 通常のURLの場合はサムネイル表示 -->
+                                                <!-- URLがない場合はサムネイル表示 -->
                                                 <div class="card-img-top" style="height: 160px; position: relative; background-color: #000;">
                                                     {% if product.package_image_url %}
-                                                    <img src="{{ product.package_image_url }}" style="width: 100%; height: 100%; object-fit: contain; opacity: 0.7;" alt="サムネイル">
+                                                        <img src="{{ product.package_image_url }}" style="width: 100%; height: 100%; object-fit: contain; opacity: 0.7;" alt="サムネイル">
                                                     {% endif %}
-                                                    
-                                                    <a href="{{ image.image_url }}" target="_blank" class="position-absolute" style="top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;">
-                                                        <i class="fas fa-play-circle fa-3x text-white"></i>
-                                                    </a>
+                                                    <div class="position-absolute" style="top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center;">
+                                                        <i class="fas fa-video-slash fa-3x text-white"></i>
+                                                    </div>
                                                 </div>
                                             {% endif %}
                                             <span class="badge bg-danger position-absolute" style="top: 5px; right: 5px;">
@@ -216,6 +221,7 @@
                                             </span>
                                         </div>
                                     {% else %}
+                                        <!-- 動画以外の画像表示 -->
                                         <img src="{{ image.image_url }}" class="card-img-top" alt="サムネイル">
                                         {% if image.image_type == 'package' %}
                                             <span class="badge bg-primary position-absolute" style="top: 5px; right: 5px;">

@@ -20,7 +20,7 @@ from dmm_x_poster.services.scheduler import scheduler_service
 
 # ロギング設定
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
@@ -271,6 +271,22 @@ def register_routes(app: Flask) -> None:
             flash('投稿の作成に失敗しました。システムログを確認してください。', 'danger')
         
         return redirect(url_for('product_detail', product_id=product_id))
+    
+    @app.route('/download_image/<int:image_id>')
+    def download_image(image_id):
+        """画像ダウンロード処理"""
+        image = db.session.get(Image, image_id)
+        if not image:
+            abort(404)
+            
+        success = image_downloader_service.download_image(image_id)
+        
+        if success:
+            flash('画像をダウンロードしました', 'success')
+        else:
+            flash('画像ダウンロードに失敗しました', 'danger')
+        
+        return redirect(url_for('product_detail', product_id=image.product_id))
 
     @app.route('/posts')
     def posts():
@@ -423,6 +439,43 @@ def register_routes(app: Flask) -> None:
         db.session.commit()
         
         return jsonify({'success': True})
+    
+    @app.route('/api/extract_jsonld')
+    def api_extract_jsonld():
+        """商品ページからJSONLDを抽出するAPI"""
+        url = request.args.get('url')
+        if not url:
+            return jsonify({'error': 'URL parameter is required'})
+        
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+            import json
+            
+            # ページを取得
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
+            
+            # HTMLをパース
+            soup = BeautifulSoup(response.text, 'lxml')
+            
+            # JSONLDを検索
+            jsonld_scripts = soup.find_all('script', type='application/ld+json')
+            results = []
+            
+            for script in jsonld_scripts:
+                try:
+                    data = json.loads(script.string)
+                    results.append(data)
+                except:
+                    results.append({'error': 'Invalid JSON', 'content': script.string[:100] + '...'})
+            
+            return jsonify({
+                'count': len(results),
+                'results': results
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)})
 
 
 def register_error_handlers(app: Flask) -> None:

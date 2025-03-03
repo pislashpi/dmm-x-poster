@@ -97,6 +97,11 @@ class ImageDownloaderService:
             else:
                 # 画像処理
                 try:
+                    # 画像をダウンロード
+                    logger.info(f"Downloading image {image_id} from URL: {image.image_url}")
+                    response = requests.get(image.image_url, timeout=10)
+                    response.raise_for_status()
+                    
                     img = PILImage.open(BytesIO(response.content))
                     
                     # 拡張子を取得
