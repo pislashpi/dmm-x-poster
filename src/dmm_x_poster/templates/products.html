@@ -46,6 +46,12 @@
                     <small class="form-text text-muted">例: 単体作品,巨乳</small>
                 </div>
                 <div class="col-md-2">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="favorite_only" name="favorite_only" value="true" {% if favorite_only %}checked{% endif %}>
+                        <label class="form-check-label" for="favorite_only">お気に入りのみ表示</label>
+                    </div>
+                </div>
+                <div class="col-md-2">
                     <button type="submit" class="btn btn-primary w-100">検索</button>
                 </div>
             </form>
@@ -97,9 +103,20 @@
                     </p>
                 </div>
                 <div class="card-footer bg-transparent border-top-0">
-                    <a href="{{ url_for('product_detail', product_id=product.id) }}" class="btn btn-primary btn-sm w-100">
-                        詳細を見る
-                    </a>
+                    <div class="row g-2">
+                        <div class="col-7">
+                            <a href="{{ url_for('product_detail', product_id=product.id) }}" class="btn btn-primary btn-sm w-100">
+                                詳細を見る
+                            </a>
+                        </div>
+                        <div class="col-5">
+                            <button type="button" class="btn btn-sm w-100 favorite-btn {% if product.is_favorite %}btn-danger{% else %}btn-outline-danger{% endif %}" 
+                                    data-product-id="{{ product.id }}" data-is-favorite="{{ product.is_favorite|lower }}">
+                                <i class="{% if product.is_favorite %}fas{% else %}far{% endif %} fa-heart"></i>
+                                <span class="d-none d-md-inline">{% if product.is_favorite %}解除{% else %}お気に入り{% endif %}</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -116,9 +133,10 @@
     {% if products.pages > 1 %}
     <nav aria-label="Page navigation" class="mt-4">
         <ul class="pagination justify-content-center">
+            <!-- 前へボタン -->
             {% if products.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('products', page=products.prev_num, keyword=keyword, sort=sort, article=article, article_id=article_id) }}">
+                <a class="page-link" href="{{ url_for('products', page=products.prev_num, keyword=keyword, sort=sort, release_status=release_status, genres=genres_str, favorite_only='true' if favorite_only else '') }}">
                     <i class="fas fa-chevron-left"></i> 前へ
                 </a>
             </li>
@@ -128,6 +146,7 @@
             </li>
             {% endif %}
             
+            <!-- ページ番号 -->
             {% for page_num in products.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                 {% if page_num %}
                     {% if page_num == products.page %}
@@ -136,7 +155,7 @@
                     </li>
                     {% else %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('products', page=page_num, keyword=keyword, sort=sort, article=article, article_id=article_id) }}">
+                        <a class="page-link" href="{{ url_for('products', page=page_num, keyword=keyword, sort=sort, release_status=release_status, genres=genres_str, favorite_only='true' if favorite_only else '') }}">
                             {{ page_num }}
                         </a>
                     </li>
@@ -148,9 +167,10 @@
                 {% endif %}
             {% endfor %}
             
+            <!-- 次へボタン -->
             {% if products.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('products', page=products.next_num, keyword=keyword, sort=sort, article=article, article_id=article_id) }}">
+                <a class="page-link" href="{{ url_for('products', page=products.next_num, keyword=keyword, sort=sort, release_status=release_status, genres=genres_str, favorite_only='true' if favorite_only else '') }}">
                     次へ <i class="fas fa-chevron-right"></i>
                 </a>
             </li>
@@ -163,4 +183,58 @@
     </nav>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // お気に入りボタンのイベント処理
+    const favoriteButtons = document.querySelectorAll('.favorite-btn');
+    
+    favoriteButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const productId = this.dataset.productId;
+            const isFavorite = this.dataset.isFavorite === 'true';
+            const button = this;
+            
+            // Ajaxリクエストを送信
+            fetch(`/products/${productId}/toggle_favorite`, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // ボタンの状態を更新
+                    const newIsFavorite = data.is_favorite;
+                    
+                    // クラスを更新
+                    if (newIsFavorite) {
+                        button.classList.remove('btn-outline-danger');
+                        button.classList.add('btn-danger');
+                        button.querySelector('i').classList.remove('far');
+                        button.querySelector('i').classList.add('fas');
+                        button.querySelector('span').textContent = '解除';
+                    } else {
+                        button.classList.remove('btn-danger');
+                        button.classList.add('btn-outline-danger');
+                        button.querySelector('i').classList.remove('fas');
+                        button.querySelector('i').classList.add('far');
+                        button.querySelector('span').textContent = 'お気に入り';
+                    }
+                    
+                    // データ属性も更新
+                    button.dataset.isFavorite = newIsFavorite.toString();
+                }
+            })
+            .catch(error => {
+                console.error('お気に入り更新エラー:', error);
+            });
+        });
+    });
+});
+</script>
 {% endblock %}

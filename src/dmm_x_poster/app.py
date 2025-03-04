@@ -12,7 +12,7 @@ from datetime import datetime
 
 from dmm_x_poster.config import JST
 from dmm_x_poster.config import Config
-from dmm_x_poster.db.models import db, Product, Image, Post, PostImage
+from dmm_x_poster.db.models import db, Product, Image, Post, PostImage, Setting
 from dmm_x_poster.services.dmm_api import dmm_api_service
 from dmm_x_poster.services.twitter_api import twitter_api_service
 from dmm_x_poster.services.image_downloader import image_downloader_service
@@ -29,6 +29,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# アプリケーション初期化時に設定テーブルを初期化
+def init_settings(app):
+    """設定テーブルの初期化"""
+    try:
+        with app.app_context():
+            # 自動予約投稿設定（デフォルトはオン）
+            if Setting.get('auto_schedule_enabled') is None:
+                Setting.set(
+                    'auto_schedule_enabled', 
+                    'true',
+                    '自動予約投稿機能の有効/無効'
+                )
+                logger.info("Initialized settings: auto_schedule_enabled=true")
+    except Exception as e:
+        # テーブルが存在しない場合など、初期化中にエラーが発生した場合はログを残す
+        logger.warning(f"Settings initialization skipped: {e}")
 
 def create_app(config_class: Optional[Any] = None) -> Flask:
     """アプリケーションファクトリ関数
@@ -98,6 +114,10 @@ def create_app(config_class: Optional[Any] = None) -> Flask:
     # エラーハンドラーを登録
     register_error_handlers(app)
     
+    # 設定の初期化 - appコンテキスト内で実行
+    with app.app_context():
+        init_settings(app)
+
     return app
 
 
@@ -133,6 +153,35 @@ def register_routes(app: Flask) -> None:
             recent_posts=recent_posts
         )
     
+    @app.route('/settings', methods=['GET'])
+    def settings():
+        """システム設定画面を表示"""
+        # すべての設定を取得
+        all_settings = Setting.query.all()
+        
+        # 辞書形式に変換
+        settings_dict = {s.key: s.value for s in all_settings}
+        
+        # フラッシュメッセージがあれば取得
+        success_message = request.args.get('success')
+        
+        return render_template(
+            'settings.html',
+            settings=settings_dict,
+            success_message=success_message
+        )
+
+    @app.route('/settings/update', methods=['POST'])
+    def update_settings():
+        """システム設定を更新"""
+        # 自動予約投稿設定
+        auto_schedule_enabled = 'true' if request.form.get('auto_schedule_enabled') else 'false'
+        Setting.set('auto_schedule_enabled', auto_schedule_enabled, '自動予約投稿機能の有効/無効')
+        
+        flash('設定を更新しました', 'success')
+        return redirect(url_for('settings', success='設定を保存しました'))
+
+
     @app.route('/products')
     def products():
         """商品一覧"""
@@ -156,6 +205,11 @@ def register_routes(app: Flask) -> None:
         elif release_status == 'preorder':
             # 予約商品（発売日が今日より後）
             query = query.filter(Product.release_date > today)
+        
+        # お気に入りのみフィルター（追加）
+        favorite_only = request.args.get('favorite_only') == 'true'
+        if favorite_only:
+            query = query.filter(Product.is_favorite == True)
         
         # ジャンルによるフィルター
         genres_str = request.args.get('genres', '')
@@ -183,7 +237,8 @@ def register_routes(app: Flask) -> None:
             keyword=keyword,
             sort=sort,
             release_status=release_status,
-            genres_str=genres_str
+            genres_str=genres_str,
+            favorite_only=favorite_only  # テンプレートに変数を渡す
         )
     
     @app.route('/products/<int:product_id>')
@@ -242,6 +297,7 @@ def register_routes(app: Flask) -> None:
         """投稿を作成"""
         post_type = request.form.get('post_type', 'scheduled')
         scheduled_at = request.form.get('scheduled_at')
+        custom_text = request.form.get('custom_text', '')
         
         # 選択された画像があるか確認
         product = db.session.get(Product, product_id)
@@ -251,10 +307,10 @@ def register_routes(app: Flask) -> None:
         
         if post_type == 'now':
             # 即時投稿
-            post = scheduler_service.create_immediate_post(product_id)
+            post = scheduler_service.create_immediate_post(product_id, custom_text)
         else:
             # 予約投稿
-            post = scheduler_service.create_post(product_id, scheduled_date=scheduled_at)
+            post = scheduler_service.create_post(product_id, scheduled_at, custom_text)
         
         if post:
             # 成功時
@@ -271,6 +327,7 @@ def register_routes(app: Flask) -> None:
             flash('投稿の作成に失敗しました。システムログを確認してください。', 'danger')
         
         return redirect(url_for('product_detail', product_id=product_id))
+
     
     @app.route('/download_image/<int:image_id>')
     def download_image(image_id):
@@ -354,6 +411,8 @@ def register_routes(app: Flask) -> None:
         hits = request.form.get('hits', 20, type=int)
         floor = request.form.get('floor', 'videoa')
         release_status = request.form.get('release_status', 'released')  # デフォルトを発売済みに
+        sort = request.form.get('sort', 'date')  # 追加：並び順
+        offset = request.form.get('offset', 1, type=int)  # 追加：取得開始位置
         
         # ジャンルIDリスト取得
         genre_ids_str = request.form.get('genre_ids', '')
@@ -367,7 +426,9 @@ def register_routes(app: Flask) -> None:
         kwargs = {
             'floor': floor,
             'hits': hits,
-            'service': 'digital'
+            'service': 'digital',
+            'sort': sort,  # 追加：並び順
+            'offset': offset  # 追加：取得開始位置
         }
         
         # 発売ステータスに応じた日付フィルター追加
@@ -395,6 +456,58 @@ def register_routes(app: Flask) -> None:
         flash(f'{count}件の新しい商品を取得しました', 'success')
         return redirect(url_for('index'))
     
+    @app.route('/products/<int:product_id>/toggle_favorite', methods=['POST'])
+    def toggle_favorite(product_id):
+        """商品のお気に入り状態を切り替え"""
+        product = db.session.get(Product, product_id)
+        if not product:
+            abort(404)
+            
+        # お気に入り状態を反転
+        product.is_favorite = not product.is_favorite
+        db.session.commit()
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            # Ajaxリクエストの場合はJSON応答
+            return jsonify({
+                'success': True,
+                'is_favorite': product.is_favorite
+            })
+        else:
+            # 通常のフォーム送信の場合はリダイレクト
+            if product.is_favorite:
+                flash('お気に入りに追加しました', 'success')
+            else:
+                flash('お気に入りから削除しました', 'info')
+            return redirect(url_for('product_detail', product_id=product_id))
+
+    @app.route('/favorites')
+    def favorites():
+        """お気に入り商品一覧"""
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
+        
+        # お気に入り商品のみ取得
+        query = Product.query.filter_by(is_favorite=True)
+        
+        # 並び替え
+        sort = request.args.get('sort', 'latest')
+        if sort == 'latest':
+            query = query.order_by(Product.fetched_at.desc())
+        elif sort == 'title':
+            query = query.order_by(Product.title)
+        elif sort == 'release':
+            query = query.order_by(Product.release_date.desc())
+        
+        # ページネーション
+        products = query.paginate(page=page, per_page=per_page)
+        
+        return render_template(
+            'favorites.html',
+            products=products,
+            sort=sort
+        )
+
     @app.route('/api/select_image', methods=['POST'])
     def api_select_image():
         """画像選択API（Ajax用）"""

@@ -1,8 +1,8 @@
 """Initial migration
 
-Revision ID: ca66bfcfa715
+Revision ID: f5ad250b01c2
 Revises: 
-Create Date: 2025-03-04 00:48:24.518230
+Create Date: 2025-03-05 00:39:58.476085
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'ca66bfcfa715'
+revision = 'f5ad250b01c2'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -31,8 +31,18 @@ def upgrade():
     sa.Column('fetched_at', sa.DateTime(), nullable=True),
     sa.Column('posted', sa.Boolean(), nullable=True),
     sa.Column('last_posted_at', sa.DateTime(), nullable=True),
+    sa.Column('is_favorite', sa.Boolean(), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('dmm_product_id')
+    )
+    op.create_table('settings',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('key', sa.String(length=50), nullable=False),
+    sa.Column('value', sa.Text(), nullable=False),
+    sa.Column('description', sa.Text(), nullable=True),
+    sa.Column('updated_at', sa.DateTime(), nullable=True),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('key')
     )
     op.create_table('images',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -51,6 +61,7 @@ def upgrade():
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('product_id', sa.Integer(), nullable=False),
     sa.Column('post_text', sa.Text(), nullable=True),
+    sa.Column('custom_text', sa.Text(), nullable=True),
     sa.Column('status', sa.String(length=20), nullable=True),
     sa.Column('scheduled_at', sa.DateTime(), nullable=False),
     sa.Column('posted_at', sa.DateTime(), nullable=True),
@@ -75,5 +86,6 @@ def downgrade():
     op.drop_table('post_images')
     op.drop_table('posts')
     op.drop_table('images')
+    op.drop_table('settings')
     op.drop_table('products')
     # ### end Alembic commands ###

@@ -43,10 +43,20 @@ class DMMAPIService:
         params.update(kwargs)
         return params
     
-    def search_items(self, floor='videoa', sort='date', **kwargs):
-        """商品検索を実行"""
+    def search_items(self, floor='videoa', sort='date', offset=1, **kwargs):
+        """商品検索を実行
+        
+        Args:
+            floor (str): 検索対象のフロア（'videoa', 'videoc'など）
+            sort (str): 並び順（'date'=新着順, 'rank'=人気順, '+price'=価格が安い順, '-price'=価格が高い順）
+            offset (int): 検索結果の開始位置（1〜1000）
+            **kwargs: その他の検索オプション
+        
+        Returns:
+            list: 検索結果のアイテムリスト
+        """
         # 基本パラメータ
-        params = self.get_params(floor=floor, sort=sort)
+        params = self.get_params(floor=floor, sort=sort, offset=offset)
         
         # 複数ジャンルの処理
         if 'article_genre' in kwargs and kwargs['article_genre']:
@@ -90,19 +100,27 @@ class DMMAPIService:
             
             # 結果件数をログに記録
             item_count = len(data['result']['items'])
-            logger.info(f"API returned {item_count} items")
+            total_count = data['result'].get('total_count', 0)
+            result_count = data['result'].get('result_count', 0)
+            first_position = data['result'].get('first_position', offset)
             
-            # 動画情報の検証 (大文字小文字の修正)
+            logger.info(f"API returned {item_count} items (total: {total_count}, result: {result_count}, position: {first_position})")
+            
+            # アイテム情報のデバッグログ
             for idx, item in enumerate(data['result']['items']):
-                has_movie = 'sampleMovieURL' in item  # 大文字小文字修正
+                has_movie = 'sampleMovieURL' in item
                 logger.debug(f"商品 #{idx+1} ({item.get('content_id', 'unknown')}): " +
                             f"動画情報あり={has_movie}")
+                
+                # アフィリエイトURL情報をログに記録
+                logger.debug(f"  URL: {item.get('URL', 'N/A')}")
+                logger.debug(f"  AffiliateURL: {item.get('affiliateURL', 'N/A')}")
                 
                 if has_movie:
                     available_sizes = []
                     movie_sizes = ['size_720_480', 'size_644_414', 'size_560_360', 'size_476_306']
                     for size in movie_sizes:
-                        if size in item['sampleMovieURL'] and item['sampleMovieURL'][size]:  # 大文字小文字修正
+                        if size in item['sampleMovieURL'] and item['sampleMovieURL'][size]:
                             available_sizes.append(size)
                     
                     logger.debug(f"  利用可能な動画サイズ: {', '.join(available_sizes) if available_sizes else 'なし'}")
@@ -164,7 +182,7 @@ class DMMAPIService:
                     dmm_product_id=item['content_id'],
                     title=item['title'],
                     actresses=json.dumps(actresses, ensure_ascii=False),
-                    url=item.get('affiliateURL', item['URL']),  # affiliateURLを優先、なければURLを使用
+                    url=item.get('affiliateURL') if item.get('affiliateURL') else item.get('URL'),  # affiliateURLを優先、なければURLを使用
                     package_image_url=item.get('imageURL', {}).get('large'),
                     maker=item.get('iteminfo', {}).get('maker', [{}])[0].get('name', ''),
                     genres=json.dumps(genres, ensure_ascii=False),

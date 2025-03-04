@@ -26,6 +26,7 @@ class Product(db.Model):
     fetched_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(JST))
     posted = db.Column(db.Boolean, default=False)
     last_posted_at = db.Column(db.DateTime)
+    is_favorite = db.Column(db.Boolean, default=False)  # お気に入りフラグ
     
     # リレーションシップ
     images = db.relationship('Image', backref='product', lazy='dynamic', cascade='all, delete-orphan')
@@ -76,6 +77,7 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
     post_text = db.Column(db.Text)
+    custom_text = db.Column(db.Text)  # カスタムテキスト
     status = db.Column(db.String(20), default='scheduled')  # scheduled, posted, failed
     scheduled_at = db.Column(db.DateTime, nullable=False)
     posted_at = db.Column(db.DateTime)
@@ -101,3 +103,35 @@ class PostImage(db.Model):
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=False)
     image_id = db.Column(db.Integer, db.ForeignKey('images.id'), nullable=False)
     display_order = db.Column(db.Integer, nullable=False)
+
+class Setting(db.Model):
+    """システム設定テーブル"""
+    __tablename__ = 'settings'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(50), unique=True, nullable=False)
+    value = db.Column(db.Text, nullable=False)
+    description = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(JST))
+    
+    @classmethod
+    def get(cls, key, default=None):
+        """キーに対応する設定値を取得"""
+        setting = cls.query.filter_by(key=key).first()
+        if setting:
+            return setting.value
+        return default
+    
+    @classmethod
+    def set(cls, key, value, description=None):
+        """設定値を保存・更新"""
+        setting = cls.query.filter_by(key=key).first()
+        if setting:
+            setting.value = value
+            setting.updated_at = datetime.datetime.now(JST)
+        else:
+            setting = cls(key=key, value=value, description=description)
+        
+        db.session.add(setting)
+        db.session.commit()
+        return setting

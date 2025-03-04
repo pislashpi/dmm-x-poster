@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="container mt-4">
-    <!-- ダッシュボード概要 -->
+    <!-- ダッシュボード概要とクイックアクション -->
     <div class="row">
         <div class="col-lg-8">
             <div class="card mb-4">
@@ -55,63 +55,80 @@
                         <a href="{{ url_for('posts') }}" class="btn btn-outline-success">
                             <i class="fas fa-paper-plane me-2"></i>投稿を管理する
                         </a>
-                        <form action="{{ url_for('fetch_new') }}" method="post">
-                            <div class="card mb-3">
-                                <div class="card-header bg-primary text-white">
-                                    <h5 class="mb-0">新着取得設定</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="row mb-3">
-                                        <div class="col-md-4">
-                                            <label class="form-label">取得件数</label>
-                                            <input type="number" name="hits" class="form-control" value="20" min="1" max="100">
-                                        </div>
-                                        <div class="col-md-4">
-                                            <label class="form-label">フロア</label>
-                                            <select name="floor" class="form-select">
-                                                <option value="videoa" selected>ビデオ/一般</option>
-                                                <option value="videoc">ビデオ/素人</option>
-                                                <option value="anime">アニメ</option>
-                                                <option value="digital">同人</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <label class="form-label">発売ステータス</label>
-                                            <select name="release_status" class="form-select">
-                                                <option value="released" selected>発売済み作品のみ</option>
-                                                <option value="preorder">予約商品のみ</option>
-                                                <option value="all">すべて</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="row mb-3">
-                                        <div class="col-md-12">
-                                            <label class="form-label">ジャンルID（カンマ区切りで複数指定可能）</label>
-                                            <input type="text" name="genre_ids" class="form-control" placeholder="例: 4025,5001">
-                                            <small class="form-text text-muted">空欄の場合は絞り込みません</small>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="row mb-3">
-                                        <div class="col-md-12">
-                                            <label class="form-label">女優ID（カンマ区切りで複数指定可能）</label>
-                                            <input type="text" name="actress_ids" class="form-control" placeholder="例: 12345,67890">
-                                            <small class="form-text text-muted">空欄の場合は絞り込みません</small>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="d-grid">
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="fas fa-sync-alt me-1"></i>新着商品を取得
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </form>
+                        <a href="{{ url_for('favorites') }}" class="btn btn-outline-danger">
+                            <i class="fas fa-heart me-2"></i>お気に入りを見る
+                        </a>
+                        <a href="{{ url_for('settings') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-cog me-2"></i>システム設定
+                        </a>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+    
+    <!-- 新着取得設定（独立したフル幅セクション） -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-sync-alt me-2"></i>新着取得設定</h5>
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('fetch_new') }}" method="post">
+                <div class="row g-3">
+                    <!-- 1行目：主要設定 -->
+                    <div class="col-md-2">
+                        <label class="form-label">取得件数</label>
+                        <input type="number" name="hits" class="form-control" value="20" min="1" max="100">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">開始位置</label>
+                        <input type="number" name="offset" class="form-control" value="1" min="1" max="1000">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">フロア</label>
+                        <select name="floor" class="form-select">
+                            <option value="videoa" selected>ビデオ/一般</option>
+                            <option value="videoc">ビデオ/素人</option>
+                            <option value="anime">アニメ</option>
+                            <option value="digital">同人</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">並び順</label>
+                        <select name="sort" class="form-select">
+                            <option value="date" selected>新着順</option>
+                            <option value="rank">人気順</option>
+                            <option value="+price">価格安い順</option>
+                            <option value="-price">価格高い順</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">発売ステータス</label>
+                        <select name="release_status" class="form-select">
+                            <option value="released" selected>発売済み</option>
+                            <option value="preorder">予約商品</option>
+                            <option value="all">すべて</option>
+                        </select>
+                    </div>
+                    
+                    <!-- 2行目：ジャンルと女優ID -->
+                    <div class="col-md-6">
+                        <label class="form-label">ジャンルID（カンマ区切りで複数指定可能）</label>
+                        <input type="text" name="genre_ids" class="form-control" placeholder="例: 4025,5001">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">女優ID（カンマ区切りで複数指定可能）</label>
+                        <input type="text" name="actress_ids" class="form-control" placeholder="例: 12345,67890">
+                    </div>
+                    
+                    <!-- 3行目：取得ボタン -->
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-sync-alt me-1"></i>新着商品を取得
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
     

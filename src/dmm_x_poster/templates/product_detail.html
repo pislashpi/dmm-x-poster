@@ -70,6 +70,22 @@
 
             <div class="card mb-3">
                 <div class="card-header">
+                    商品アクション
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('toggle_favorite', product_id=product.id) }}" method="post" class="mb-3">
+                        <button type="submit" class="btn btn-{% if product.is_favorite %}danger{% else %}outline-danger{% endif %} w-100">
+                            <i class="{% if product.is_favorite %}fas{% else %}far{% endif %} fa-heart me-1"></i>
+                            {% if product.is_favorite %}お気に入りから削除{% else %}お気に入りに追加{% endif %}
+                        </button>
+                    </form>
+                    
+                    <a href="{{ product.url }}" target="_blank" class="btn btn-primary w-100 mb-2">商品ページを開く</a>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
                     投稿ステータス
                 </div>
                 <div class="card-body">
@@ -104,6 +120,11 @@
                         <div class="mb-3" id="schedule_date_container" style="display: none;">
                             <label for="scheduled_at" class="form-label">投稿日時</label>
                             <input type="datetime-local" class="form-control" id="scheduled_at" name="scheduled_at">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="custom_text" class="form-label">カスタムテキスト（空白の場合はデフォルトテキスト）</label>
+                            <textarea class="form-control" id="custom_text" name="custom_text" rows="3" placeholder="投稿に表示するカスタムテキストを入力してください。URLは自動的に追加されます。"></textarea>
                         </div>
                         
                         <button type="submit" class="btn btn-success" {% if not selected_images %}disabled{% endif %}>
