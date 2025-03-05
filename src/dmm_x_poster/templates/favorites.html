@@ -12,15 +12,32 @@
     <div class="card mb-4">
         <div class="card-body">
             <form action="{{ url_for('favorites') }}" method="get" class="row g-3">
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" name="keyword" class="form-control" placeholder="タイトルで検索..." value="{{ keyword }}">
+                    </div>
+                </div>
+                <div class="col-md-2">
                     <select name="sort" class="form-select">
                         <option value="latest" {% if sort == 'latest' %}selected{% endif %}>新着順</option>
                         <option value="title" {% if sort == 'title' %}selected{% endif %}>タイトル順</option>
                         <option value="release" {% if sort == 'release' %}selected{% endif %}>発売日順</option>
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
+                    <input type="text" name="genres" class="form-control" placeholder="ジャンル(カンマ区切り)" value="{{ genres_str }}">
+                    <small class="form-text text-muted">例: 単体作品,巨乳</small>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" name="actress" class="form-control" placeholder="女優名(カンマ区切り)" value="{{ actress_str }}">
+                    <small class="form-text text-muted">例: 三上悠亜,深田えいみ</small>
+                </div>
+                <div class="col-md-1">
                     <button type="submit" class="btn btn-primary w-100">適用</button>
+                </div>
+                <div class="col-md-12 mt-2">
+                    <a href="{{ url_for('favorites') }}" class="btn btn-outline-secondary">条件をリセット</a>
                 </div>
             </form>
         </div>
@@ -31,23 +48,30 @@
         {% for product in products.items %}
         <div class="col-md-3 col-sm-6 mb-4">
             <div class="card h-100">
-                {% if product.package_image_url %}
-                <img src="{{ product.package_image_url }}" class="card-img-top" alt="パッケージ画像" 
-                     style="height: 250px; object-fit: cover;">
-                {% else %}
-                <div class="bg-light text-center py-5" style="height: 250px;">
-                    <i class="fas fa-image fa-4x text-muted mt-5"></i>
-                </div>
-                {% endif %}
+                <!-- サムネイル画像をリンクに変更 -->
+                <a href="{{ url_for('product_detail', product_id=product.id) }}" class="text-decoration-none">
+                    {% if product.package_image_url %}
+                    <img src="{{ product.package_image_url }}" class="card-img-top" alt="パッケージ画像" 
+                         style="height: 250px; object-fit: cover;">
+                    {% else %}
+                    <div class="bg-light text-center py-5" style="height: 250px;">
+                        <i class="fas fa-image fa-4x text-muted mt-5"></i>
+                    </div>
+                    {% endif %}
+                </a>
                 <div class="card-body">
-                    <h5 class="card-title" style="font-size: 1rem;">{{ product.title|truncate(50) }}</h5>
+                    <h5 class="card-title" style="font-size: 1rem;">
+                        <a href="{{ url_for('product_detail', product_id=product.id) }}" class="text-decoration-none text-dark">
+                            {{ product.title|truncate(50) }}
+                        </a>
+                    </h5>
                     
                     {% if product.get_actresses_list() %}
                     <p class="card-text mb-2">
                         <small>
                             <strong>出演:</strong>
                             {% for actress in product.get_actresses_list()[:2] %}
-                            <span class="badge bg-info text-dark">{{ actress }}</span>
+                            <a href="{{ url_for('favorites', actress=actress) }}" class="badge bg-info text-dark text-decoration-none">{{ actress }}</a>
                             {% endfor %}
                             {% if product.get_actresses_list()|length > 2 %}
                             <span class="badge bg-secondary">+{{ product.get_actresses_list()|length - 2 }}</span>
@@ -95,7 +119,7 @@
         <ul class="pagination justify-content-center">
             {% if products.has_prev %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('favorites', page=products.prev_num, sort=sort) }}">
+                <a class="page-link" href="{{ url_for('favorites', page=products.prev_num, sort=sort, keyword=keyword, genres=genres_str, actress=actress_str) }}">
                     <i class="fas fa-chevron-left"></i> 前へ
                 </a>
             </li>
@@ -113,7 +137,7 @@
                     </li>
                     {% else %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('favorites', page=page_num, sort=sort) }}">
+                        <a class="page-link" href="{{ url_for('favorites', page=page_num, sort=sort, keyword=keyword, genres=genres_str, actress=actress_str) }}">
                             {{ page_num }}
                         </a>
                     </li>
@@ -127,7 +151,7 @@
             
             {% if products.has_next %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('favorites', page=products.next_num, sort=sort) }}">
+                <a class="page-link" href="{{ url_for('favorites', page=products.next_num, sort=sort, keyword=keyword, genres=genres_str, actress=actress_str) }}">
                     次へ <i class="fas fa-chevron-right"></i>
                 </a>
             </li>

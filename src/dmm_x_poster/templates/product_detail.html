@@ -38,7 +38,7 @@
                     <p>
                         <strong>出演者:</strong><br>
                         {% for actress in product.get_actresses_list() %}
-                        <span class="badge bg-info text-dark">{{ actress }}</span>
+                        <a href="{{ url_for('products', actress=actress) }}" class="badge bg-info text-dark text-decoration-none">{{ actress }}</a>
                         {% endfor %}
                     </p>
                     {% endif %}
@@ -47,7 +47,7 @@
                     <p>
                         <strong>ジャンル:</strong><br>
                         {% for genre in product.get_genres_list() %}
-                        <span class="badge bg-secondary">{{ genre }}</span>
+                        <a href="{{ url_for('products', genres=genre) }}" class="badge bg-secondary text-decoration-none">{{ genre }}</a>
                         {% endfor %}
                     </p>
                     {% endif %}

@@ -206,7 +206,7 @@ def register_routes(app: Flask) -> None:
             # 予約商品（発売日が今日より後）
             query = query.filter(Product.release_date > today)
         
-        # お気に入りのみフィルター（追加）
+        # お気に入りのみフィルター
         favorite_only = request.args.get('favorite_only') == 'true'
         if favorite_only:
             query = query.filter(Product.is_favorite == True)
@@ -218,6 +218,14 @@ def register_routes(app: Flask) -> None:
             # 複数ジャンルでAND検索
             for genre in genres_list:
                 query = query.filter(Product.genres.like(f'%{genre}%'))
+        
+        # 女優名によるフィルター（新機能）
+        actress_str = request.args.get('actress', '')
+        if actress_str:
+            actresses_list = [actress.strip() for actress in actress_str.split(',') if actress.strip()]
+            # 複数女優でAND検索
+            for actress in actresses_list:
+                query = query.filter(Product.actresses.like(f'%{actress}%'))
         
         # 並び替え
         sort = request.args.get('sort', 'latest')
@@ -238,7 +246,58 @@ def register_routes(app: Flask) -> None:
             sort=sort,
             release_status=release_status,
             genres_str=genres_str,
-            favorite_only=favorite_only  # テンプレートに変数を渡す
+            actress_str=actress_str,  # 新しいパラメータを追加
+            favorite_only=favorite_only
+        )
+    
+    def favorites():
+        """お気に入り商品一覧"""
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
+        
+        # お気に入り商品のみ取得
+        query = Product.query.filter_by(is_favorite=True)
+        
+        # キーワード検索
+        keyword = request.args.get('keyword', '')
+        if keyword:
+            query = query.filter(Product.title.like(f'%{keyword}%'))
+        
+        # ジャンルによるフィルター
+        genres_str = request.args.get('genres', '')
+        if genres_str:
+            genres_list = [genre.strip() for genre in genres_str.split(',') if genre.strip()]
+            # 複数ジャンルでAND検索
+            for genre in genres_list:
+                query = query.filter(Product.genres.like(f'%{genre}%'))
+        
+        # 女優名によるフィルター（新機能）
+        actress_str = request.args.get('actress', '')
+        if actress_str:
+            actresses_list = [actress.strip() for actress in actress_str.split(',') if actress.strip()]
+            # 複数女優でAND検索
+            for actress in actresses_list:
+                query = query.filter(Product.actresses.like(f'%{actress}%'))
+        
+        # 並び替え
+        sort = request.args.get('sort', 'latest')
+        if sort == 'latest':
+            query = query.order_by(Product.fetched_at.desc())
+        elif sort == 'title':
+            query = query.order_by(Product.title)
+        elif sort == 'release':
+            query = query.order_by(Product.release_date.desc())
+        
+        # ページネーション
+        products = query.paginate(page=page, per_page=per_page)
+        
+        return render_template(
+            'favorites.html',
+            products=products,
+            keyword=keyword,
+            sort=sort,
+            genres_str=genres_str,
+            actress_str=actress_str,  # 新しいパラメータを追加
         )
     
     @app.route('/products/<int:product_id>')
@@ -339,9 +398,9 @@ def register_routes(app: Flask) -> None:
         success = image_downloader_service.download_image(image_id)
         
         if success:
-            flash('画像をダウンロードしました', 'success')
+            flash('動画をダウンロードしました', 'success')
         else:
-            flash('画像ダウンロードに失敗しました', 'danger')
+            flash('動画ダウンロードに失敗しました', 'danger')
         
         return redirect(url_for('product_detail', product_id=image.product_id))
 
